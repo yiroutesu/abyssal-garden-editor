@@ -322,6 +322,7 @@ function makeWorld(D, T, flyPts, POSES) {
   if (typeof WORLD_EDIT === 'undefined' || !WORLD_EDIT.objects) {
     solid(10, -5, gy(-5, -4) - 0.6, -4, 1, qMul(qAxis(0, 1, 0, 1.2), qMul(qAxis(0, 0, 1, 0.16), qAxis(1, 0, 0, -0.3))), 2, 0.3, 1, 0);          // whale fluke
     solid(11, 59.5, -23, 6, 1, qMul(qAxis(0, 1, 0, -PI / 2), qMul(qAxis(0, 0, 1, -0.1), qAxis(1, 0, 0, 0.32))), 3, 0.5, 1, 0); // ship hull
+    solid(27, 6, gy(6, 26), 26, 1.15, qMul(qAxis(0, 1, 0, 0.21), qMul(qAxis(0, 0, 1, 0.03), qAxis(1, 0, 0, -0.02))), 3, 0.35, 1, 0); // ruined hut
   } else for (const o of WORLD_EDIT.objects) {
     const q = qMul(qAxis(0, 1, 0, (o.yaw || 0) * PI / 180), qMul(qAxis(0, 0, 1, (o.roll || 0) * PI / 180), qAxis(1, 0, 0, (o.pitch || 0) * PI / 180)));
     solid(o.mesh | 0, o.x, o.y == null ? gy(o.x, o.z) : o.y, o.z, o.scale == null ? 1 : o.scale, q, o.mat == null ? 1 : o.mat, o.seed == null ? 0 : o.seed, o.ts == null ? 1 : o.ts, o.bob || 0);
@@ -392,14 +393,18 @@ function makeWorld(D, T, flyPts, POSES) {
   const mantas = [];
   for (const m of [[1, -28, 3.5, 14, 3.012, 0.085, 3.6, 0.1], [49, -31, 24.5, 5, 0.029, -0.08, 3.7, 0.4], [0, -14, -80, 34, 0.3, 0.06, 5.2, 0.7], [-50, -18, 20, 26, 5, -0.075, 3.8, 0.55], [10, -16, 86, 26, 2.2, 0.07, 4.4, 0.85], [20, -11, -20, 46, 4.2, -0.045, 5.6, 0.25]]) mantas.push(...m);
 
-  // --- jellyfish: [x, y, z, drift radius, drift speed, bell size]
+  // --- jellyfish: loose swarms, but every member drifts on its own orbit, so a group gathers
+  // without ever moving as one body
   const jellies = [];
   rseed(15);
-  for (const j of [[-2, -24, 2, 6, 0.10, 1.1], [-8, -28, -6, 8, -0.08, 0.9], [-15, -22, -14, 7, 0.07, 1.25],
-    [52, -26, 4, 5, 0.11, 1.0], [57, -20, 13, 9, -0.06, 0.85], [-10, -26, -102, 7, 0.09, 1.15],
-    [7, -22, -106, 8, -0.07, 0.95], [0, -24, -78, 6, 0.08, 1.2], [1, -25, 92, 9, -0.09, 1.05]]) {
-    if (Dw(j[0], j[1], j[2]) > -2) continue;
-    jellies.push(j[0], j[1], j[2], j[3], rnd(), j[4], j[5], rnd());
+  const SWARM = [[-4, -25, -2, 6, 13], [54, -24, 8, 5, 11], [-1, -24, -98, 6, 14], [1, -24, 90, 3, 8]];
+  for (const [cx, cy, cz, n, sp] of SWARM) {
+    for (let i = 0; i < n; i++) {
+      const an = rnd() * TAU, r = sqrt(rnd()) * sp;
+      const x = cx + cos(an) * r, z = cz + sin(an) * r, y = cy + (rnd() - .5) * 5;
+      if (Dw(x, y, z) > -2) continue;
+      jellies.push(x, y, z, 2.5 + rnd() * 5.5, rnd(), (rnd() - .5) * .24, .75 + rnd() * .6, rnd());
+    }
   }
 
   // --- drifting particles
@@ -407,7 +412,7 @@ function makeWorld(D, T, flyPts, POSES) {
   for (let i = 0; i < snow.length; i++) snow[i] = rnd();
 
   const sol = { data: [], ranges: [] }; let si = 0;
-  for (let m = 0; m < 12; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
+  for (let m = 0; m < 28; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
   const packC = (L) => {
     let n = 0; const start = new Uint32Array(nCells + 1);
     for (let c = 0; c < nCells; c++) { start[c] = n; n += L[c].length / 12; }
@@ -552,6 +557,75 @@ function meshShip() {
   m.sweep([[Lh + 1.4, 2.6, 0], [Lh + 8, 5.2, 0.2]], 0.34, 0.34, up);
   return m;
 }
+// ruined hut (7 x 5 m): stone courses, two and a half walls still up, exposed timber frame, one
+// side of the roof caved in, and a low broken wall around the plot — assembled like the wreck
+function meshHouse() {
+  rseed(230);
+  const m = new Mesh(), up = () => [0, 1, 0];
+  const block = (x, y, z, L, along) => {
+    const dx = along ? 0 : L / 2, dz = along ? L / 2 : 0;
+    m.sweep([[x - dx, y, z - dz], [x + dx, y, z + dz]], .40, .30, up);
+  };
+  // stone course wall: keeps a fraction of its length, leaves a doorway, top breaks unevenly
+  const wall = (x0, z0, x1, z1, hMax, keep = 1, gap = null) => {
+    const along = abs(x1 - x0) < abs(z1 - z0) ? 1 : 0;
+    const n = max(1, round(hypot(x1 - x0, z1 - z0) / .66));
+    for (let i = 0; i < n; i++) {
+      const f = n > 1 ? i / (n - 1) : 0;
+      if (f > keep) break;
+      if (gap && f > gap[0] && f < gap[1]) continue;
+      const hh = hMax * (.62 + .5 * fbm(i * .9 + x0 * .5, 3, z0 * .7, 2));
+      for (let y = .15; y < hh; y += .31) {
+        if (y > .45 && rnd() < .13) continue;
+        block(mix(x0, x1, f) + (along ? rr(-.05, .05) : 0), y, mix(z0, z1, f) + (along ? 0 : rr(-.05, .05)), .62, along);
+      }
+    }
+  };
+  const beam = (a, b, w = .16) => m.sweep([a, b], w, w, up);
+  // --- shell: back and right walls stand, the front one only reaches its left half, the left wall
+  // is down to two stubs; a doorway is left open in the back wall
+  wall(-4, -3.2, 4, -3.2, 2.5, 1, [.44, .6]);
+  wall(4, -3.2, 4, 3.2, 2.3, .95);
+  wall(-4, 3.2, 1.1, 3.2, 1.7, 1);
+  wall(-4, -3.2, -4, -2.0, 2.2, 1);
+  wall(-4, 2.6, -4, 3.2, 1.3, 1);
+  // --- timber frame: corner posts, a sagging ridge beam, rafters
+  for (const [x, z, h] of [[-4, -3.2, 2.9], [4, -3.2, 2.7], [-4, 3.2, 1.9], [4, 3.2, 2.4], [0, -3.2, 2.8]])
+    m.sweep([[x, 0, z], [x, h, z]], .26, .26, () => [1, 0, 0]);
+  beam([-4.4, 3.0, 0], [4.4, 2.85, 0], .22);
+  const roofY = (z) => 2.05 + (z + 3.35) / 3.35 * .95;
+  for (let x = -4.1; x <= 4.2; x += 1.15) {
+    if (rnd() < .18) continue;
+    beam([x, 3.0, 0], [x, 2.05, -3.35], .15);
+  }
+  // --- roof: the seaward half is still fully tiled, the other half has fallen into the room
+  for (let z = -.04, row = 0; z > -3.42; z -= .27, row++) {
+    const y = roofY(z) + .05, xo = (row & 1) ? .19 : 0;
+    for (let x = -4.34 + xo; x + .39 < 4.37; x += .38)
+      m.sweep([[x, y, z], [x + .39, y, z - .015]], .31, .06, up);   // one curved tile per slot
+  }
+  for (let x = -3.6; x < 4; x += 1.5) {
+    if (rnd() < .35) continue;
+    beam([x, 2.95, 0], [x * .82, 1.45 + rnd() * .5, 1.9], .14);      // broken rafters hanging in
+  }
+  for (let i = 0; i < 7; i++) {
+    const x = rr(-3.5, 4.5), z = rr(2.4, 5.4), an = rr(-.6, .6);
+    m.sweep([[x, .16, z], [x + cos(an) * rr(1.2, 2.4), .3 + rr(-.1, .15), z + sin(an) * rr(1.2, 2.4)]], .09, .34, up);
+  }
+  // --- low perimeter wall around the plot, with a gap for the gate
+  wall(-6.6, -4.9, 6.6, -4.9, .8, 1);
+  wall(-6.6, -4.9, -6.6, 4.9, .72, 1, [.5, .62]);
+  wall(6.6, -4.9, 6.6, 4.9, .7, .92);
+  wall(-6.6, 4.9, -1.2, 4.9, .74, 1);
+  wall(.5, 4.9, 6.6, 4.9, .66, .88);
+  // --- fallen stones and rubble
+  for (let i = 0; i < 24; i++) {
+    const an = rnd() * TAU, r = rr(3.4, 6.4), x = cos(an) * r, z = sin(an) * r;
+    if (abs(x) < 4.5 && abs(z) < 3.6) continue;
+    block(x, rr(.06, .2), z, rr(.35, .7), rnd() < .5 ? 0 : 1);
+  }
+  return m;
+}
 // manta ray: span along x (half span = 1), nose +z; aux = span coordinate for the flap animation
 function meshManta() {
   const m = new Mesh(), NU = 72, M = 22, rings = [];
@@ -585,16 +659,18 @@ function meshFish() {
   m.tri(a, b, c); m.tri(a, c, d);
   return m;
 }
-// jellyfish: translucent bell (outer + inner shell, scalloped rim), 8 long tentacles + 4 oral arms.
-// aux = radius fraction on the bell, -length fraction on the tentacles: drives pulse and sway in vsJelly
+// jellyfish: moon jelly — flat glassy bell, four amber horseshoe gonads, a fringe of short rim
+// tentacles and four long frilly oral arms.
+// aux (normal.w, kept inside [-1,1]) encodes the parts: 0..1 = bell profile, -0.06 = gonads,
+// -0.25..-0.68 = oral arms, -0.75..-1 = rim tentacles; vsJelly and fsJelly read those bands.
 function meshJelly() {
-  const m = new Mesh(), SEG = 26, NR = 9, R0 = 0.62, H0 = 0.46;
-  const bR = (u) => R0 * pow(sin(u * PI * .5), .72);
-  const bH = (u) => H0 * cos(u * PI * .5) - .07 * u * u * u;
+  const m = new Mesh(), SEG = 32, NR = 10, R0 = 0.70, H0 = 0.30;
+  const bR = (u) => R0 * pow(sin(u * PI * .5), .55);
+  const bH = (u) => H0 * cos(u * PI * .5) - .05 * u * u * u;
   const ring = (u, k, dy) => {
     const a = [];
     for (let s = 0; s < SEG; s++) {
-      const an = s / SEG * TAU, sc = 1 + .05 * cos(10 * an) * u * u * u, r = bR(u) * k * sc;
+      const an = s / SEG * TAU, sc = 1 + .035 * cos(8 * an) * u * u, r = bR(u) * k * sc;
       a.push(m.v(cos(an) * r, bH(u) + dy, sin(an) * r, u));
     }
     return a;
@@ -604,17 +680,42 @@ function meshJelly() {
   const apex = m.v(0, H0, 0, 0);
   for (let s = 0; s < SEG; s++) m.tri(apex, out[0][s], out[0][(s + 1) % SEG]);
   for (let k = 0; k < out.length - 1; k++) for (let s = 0; s < SEG; s++) { const s2 = (s + 1) % SEG; m.quad(out[k][s], out[k + 1][s], out[k + 1][s2], out[k][s2]); }
-  for (let i = NR; i >= 1; i--) inn.push(ring(i / NR, .88, .055 + .05 * (1 - i / NR)));
+  for (let i = NR; i >= 1; i--) inn.push(ring(i / NR, .95, .035 + .035 * (1 - i / NR)));
   for (let k = 0; k < inn.length - 1; k++) for (let s = 0; s < SEG; s++) { const s2 = (s + 1) % SEG; m.quad(inn[k][s], inn[k][s2], inn[k + 1][s2], inn[k + 1][s]); }
   for (let s = 0; s < SEG; s++) { const s2 = (s + 1) % SEG; m.quad(out[NR - 1][s], out[NR - 1][s2], inn[0][s2], inn[0][s]); }
-  for (let t = 0; t < 12; t++) {
-    const long = t < 8, an = t / (long ? 8 : 4) * TAU + (long ? .18 : .7), r0 = long ? .46 : .2;
-    const len = long ? 1.55 : .85, n = long ? 7 : 5, pts = [];
-    for (let i = 0; i < n; i++) {
-      const f = i / (n - 1), dr = r0 * (1 - .25 * f) + (long ? .10 : .16) * sin(f * 2.6 + an * 3);
-      pts.push([cos(an) * dr, -.02 - len * f, sin(an) * dr]);
+
+  // four horseshoe gonads, just under the dome and glowing through it
+  for (let g = 0; g < 4; g++) {
+    const a0 = g * TAU / 4 + PI / 4, cx = cos(a0) * .20, cz = sin(a0) * .20, pts = [];
+    for (let i = 0; i < 8; i++) {
+      const an = a0 + (i / 7 - .5) * 4.6; // horseshoe opening faces the centre
+      pts.push([cx + cos(an) * .062, .262 + .008 * sin(i * 2.1), cz + sin(an) * .062]);
     }
-    m.tube(pts, (k) => (long ? .013 : .038) * (1 - .75 * k / (n - 1)), long ? 4 : 5, true, (k) => -(0.05 + 0.95 * k / (n - 1)));
+    m.tube(pts, .021, 5, true, () => -.06);
+  }
+
+  // four frilly oral arms hanging from the centre
+  for (let g = 0; g < 4; g++) {
+    const a0 = g * TAU / 4 + .35, n = 10, L = 1.15, A = [], B = [];
+    for (let i = 0; i < n; i++) {
+      const f = i / (n - 1), an = a0 + .45 * f;
+      const rad = .09 + .17 * f + .035 * sin(f * 3.2 + a0), y = -.03 - L * f;
+      const wd = (.05 + .085 * f) * (1 - .22 * sin(f * 11)), sx = -sin(an) * wd * .5, sz = cos(an) * wd * .5;
+      const aux = -(0.25 + .43 * f), x = cos(an) * rad, z = sin(an) * rad;
+      A.push(m.v(x + sx, y, z + sz, aux));
+      B.push(m.v(x - sx, y, z - sz, aux));
+    }
+    for (let i = 0; i < n - 1; i++) m.quad(A[i], A[i + 1], B[i + 1], B[i]);
+  }
+
+  // fringe of short tentacles around the rim
+  for (let t = 0; t < 40; t++) {
+    const an = t / 40 * TAU, r0 = R0 * (1 + .035 * cos(8 * an)) * .995, len = .20 + .07 * sin(t * 2.3), pts = [];
+    for (let i = 0; i < 4; i++) {
+      const f = i / 3;
+      pts.push([cos(an) * (r0 + .015 * f), -.055 - len * f, sin(an) * (r0 + .015 * f)]);
+    }
+    m.tube(pts, .0075, 3, false, (i) => -(0.75 + .25 * i / 3));
   }
   return m;
 }

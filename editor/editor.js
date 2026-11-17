@@ -11,6 +11,10 @@
   // ---------------------------------------------------------------- registries
   const MESH_NAMES = ['巨石 A', '巨石 B', '巨石 C', '巨石 D', '海绵 A', '海绵 B', '海绵 C', '珊瑚 A', '珊瑚 B', '管状海绵', '鲸尾石雕', '沉船'];
   const MESH_MAT = [1, 1, 1, 1, 4, 4, 4, 5, 5, 4, 2, 3];
+  // the hut lives at mesh id 27 (ids 12-26 are animated meshes and LOD copies, not placeable)
+  MESH_NAMES[27] = '废弃房屋';
+  MESH_MAT[27] = 3;
+  const PLACEABLE = MESH_NAMES.reduce((a, n, i) => (n ? a.concat(i) : a), []);
   const ZONE_DEFS = {
     hot: { label: '珊瑚热区', color: '#ff8c3c', fields: [['半径', 2, 1, 6, 90]], make: (x, z) => [x, z, 30] },
     zs: { label: '海绵/珊瑚区', color: '#78c8ff', fields: [['半径', 2, 1, 6, 90], ['权重', 3, 0.05, 0, 1]], make: (x, z) => [x, z, 24, 0.7] },
@@ -26,11 +30,13 @@
   };
 
   // ---------------------------------------------------------------- data
+  const HOUSE = { mesh: 27, x: 6, z: 26, y: null, scale: 1.15, yaw: 12.03, pitch: -1.15, roll: 1.72, mat: 3, seed: 0.35, ts: 1, bob: 0 };
   const defaultData = () => ({
     terrain: { mesas: clone(MESAS), arches: clone(ARCHES), holes: clone(HOLES), clears: clone(CLEARS) },
     objects: [
       { mesh: 10, x: -5, z: -4, y: null, scale: 1, yaw: 68.75, pitch: -17.19, roll: 9.17, mat: 2, seed: 0.3, ts: 1, bob: 0 },
       { mesh: 11, x: 59.5, z: 6, y: -23, scale: 1, yaw: -90, pitch: 18.33, roll: -5.73, mat: 3, seed: 0.5, ts: 1, bob: 0 },
+      { ...HOUSE },
     ],
     zones: { hot: clone(HOT), zs: clone(ZS), magenta: clone(MAGENTA), kelp: clone(KELPZ), gardens: clone(GARDENS) },
     cfg: { kelp: 1, ground: 1, props: 1 },
@@ -42,6 +48,7 @@
     d.terrain = d.terrain || {};
     for (const k of ['mesas', 'arches', 'holes', 'clears']) if (!Array.isArray(d.terrain[k])) d.terrain[k] = base.terrain[k];
     if (!Array.isArray(d.objects)) d.objects = base.objects;
+    else if (!d.objects.some((o) => o.mesh === 27)) d.objects.push({ ...HOUSE }); // picked up when the hut was added
     d.zones = d.zones || {};
     for (const k of Object.keys(ZONE_DEFS)) if (!Array.isArray(d.zones[k])) d.zones[k] = base.zones[k];
     d.cfg = Object.assign({ kelp: 1, ground: 1, props: 1 }, d.cfg || {});
@@ -69,6 +76,7 @@
   let cw = 1, ch = 1;
 
   const msg = (t) => { $('#msg').textContent = t; };
+  const KIND_NAME = { object: '物体', mesa: '台地', arch: '拱门', hole: '隧道', clear: '留空区', zone: '区域' };
   const autosave = () => { try { localStorage.setItem(STORE, JSON.stringify(payload())); } catch {} };
 
   function payload() {
@@ -210,18 +218,17 @@
   };
 
   // ---------------------------------------------------------------- drawing
+  // stadium outline: the glyph covers the real footprint of the primitive, not just its axis
   function capsulePath(a, b, r) {
     const [ax, ay] = w2s(a[0], a[1]), [bx, by] = w2s(b[0], b[1]);
+    const rr = Math.max(.6, r * view.k);
+    const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy);
     ctx.beginPath();
-    ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
-    ctx.lineWidth = Math.max(2, 2 * r * view.k);
-    ctx.lineCap = 'round';
-  }
-
-  function cross(x, z, s = 5, color = 'rgba(255,255,255,.5)') {
-    const [px, py] = w2s(x, z);
-    ctx.strokeStyle = color; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(px - s, py); ctx.lineTo(px + s, py); ctx.moveTo(px, py - s); ctx.lineTo(px, py + s); ctx.stroke();
+    if (l < .6) { ctx.arc(ax, ay, rr, 0, Math.PI * 2); ctx.closePath(); return; }
+    const an = Math.atan2(dy, dx);
+    ctx.arc(bx, by, rr, an - Math.PI / 2, an + Math.PI / 2);
+    ctx.arc(ax, ay, rr, an + Math.PI / 2, an + Math.PI * 1.5);
+    ctx.closePath();
   }
 
   const isSelRef = (ref) => selSet.some((s) => s.ref === ref);
@@ -255,8 +262,8 @@
       for (const p of data.zones[k]) {
         const [px, py] = w2s(p[0], p[1]), r = Math.max(2, p[2] * view.k);
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fillStyle = def.color + '14'; ctx.fill();
-        ctx.strokeStyle = def.color + '99'; ctx.lineWidth = 1;
+        ctx.fillStyle = def.color + (isSelRef(p) ? '3d' : '26'); ctx.fill();
+        ctx.strokeStyle = def.color + 'b3'; ctx.lineWidth = isSelRef(p) ? 2 : 1;
         if (k === 'hot' || k === 'kelp') ctx.setLineDash([5, 4]);
         ctx.stroke(); ctx.setLineDash([]);
         if (isSelRef(p)) { ctx.beginPath(); ctx.arc(px, py, r + 2, 0, Math.PI * 2); ctx.strokeStyle = '#5fd3c4'; ctx.lineWidth = 2; ctx.stroke(); }
@@ -264,23 +271,33 @@
     }
 
     if (layers.prims) {
+      // a clear is a soft patch: the falloff band is part of its footprint
       for (const m of data.terrain.clears) {
+        capsulePath([m[0], m[1]], [m[2], m[3]], m[4] + m[5]);
+        ctx.fillStyle = 'rgba(150,180,200,.06)'; ctx.fill();
         capsulePath([m[0], m[1]], [m[2], m[3]], m[4]);
-        ctx.setLineDash([3, 5]); ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(220,230,240,.35)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = isSelRef(m) ? 'rgba(95,211,196,.20)' : 'rgba(150,180,200,.13)'; ctx.fill();
+        ctx.setLineDash([3, 5]); ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(200,215,225,.45)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke(); ctx.setLineDash([]);
       }
       for (const m of data.terrain.holes) {
         capsulePath([m[0], m[2]], [m[4], m[6]], m[3]);
-        ctx.setLineDash([7, 5]); ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(120,220,255,.8)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = isSelRef(m) ? 'rgba(95,211,196,.20)' : 'rgba(120,220,255,.15)'; ctx.fill();
+        ctx.setLineDash([7, 5]); ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(120,220,255,.85)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke(); ctx.setLineDash([]);
       }
       for (const m of data.terrain.mesas) {
         capsulePath([m[0], m[1]], [m[2], m[3]], m[4]);
-        ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(214,232,240,.75)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke();
+        ctx.fillStyle = isSelRef(m) ? 'rgba(95,211,196,.22)' : 'rgba(190,215,230,.17)'; ctx.fill();
+        ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(214,232,240,.7)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke();
       }
       for (const m of data.terrain.arches) {
         const [px, py] = w2s(m[0], m[2]);
-        ctx.beginPath(); ctx.arc(px, py, Math.max(2, m[4] * view.k), 0, Math.PI * 2);
-        ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(255,220,140,.8)'; ctx.lineWidth = 2; ctx.stroke();
-        cross(m[0], m[2], 4, isSelRef(m) ? '#5fd3c4' : 'rgba(255,220,140,.5)');
+        const ro = Math.max(2, (m[4] + m[5]) * view.k), ri = (m[4] - m[5]) * view.k;
+        ctx.beginPath();
+        ctx.arc(px, py, ro, 0, Math.PI * 2);
+        if (ri > .8) ctx.arc(px, py, ri, 0, Math.PI * 2, true);
+        ctx.fillStyle = isSelRef(m) ? 'rgba(95,211,196,.25)' : 'rgba(255,220,140,.16)';
+        ctx.fill('evenodd');
+        ctx.strokeStyle = isSelRef(m) ? '#5fd3c4' : 'rgba(255,220,140,.75)'; ctx.lineWidth = isSelRef(m) ? 2 : 1; ctx.stroke();
       }
     }
 
@@ -303,10 +320,14 @@
       const a = draft.a, b = draft.b;
       if (draft.kind === 'arch') {
         const [px, py] = w2s(a[0], a[1]);
-        ctx.beginPath(); ctx.arc(px, py, Math.max(4, Math.hypot(b[0] - a[0], b[1] - a[1]) * view.k), 0, Math.PI * 2);
+        const ro = Math.max(4, Math.hypot(b[0] - a[0], b[1] - a[1]) * view.k), ri = Math.max(.5, ro - 1.2 * view.k);
+        ctx.beginPath(); ctx.arc(px, py, ro, 0, Math.PI * 2); ctx.arc(px, py, ri, 0, Math.PI * 2, true);
+        ctx.fillStyle = 'rgba(255,220,140,.16)'; ctx.fill('evenodd');
         ctx.strokeStyle = 'rgba(255,220,140,.9)'; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
       } else {
         capsulePath(a, b, draft.kind === 'mesa' ? 6 : draft.kind === 'hole' ? 3.2 : 5);
+        ctx.fillStyle = draft.kind === 'hole' ? 'rgba(120,220,255,.15)' : draft.kind === 'clear' ? 'rgba(150,180,200,.13)' : 'rgba(190,215,230,.17)';
+        ctx.fill();
         ctx.strokeStyle = draft.kind === 'hole' ? 'rgba(120,220,255,.9)' : 'rgba(255,255,255,.85)';
         ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -328,29 +349,30 @@
     return Math.hypot(px - ax - dx * t, pz - az - dz * t);
   };
 
-  function hitTest(x, z) {
-    const pad = 6 / view.k;
+  // every item under the cursor, topmost first — repeated clicks cycle through this list
+  function hitsAt(x, z) {
+    const pad = 6 / view.k, out = [];
     if (layers.objects) for (let i = data.objects.length - 1; i >= 0; i--) {
       const o = data.objects[i];
       if (hiddenMesh.has(o.mesh)) continue;
-      if (Math.hypot(x - o.x, z - o.z) < Math.max(1.4, 9 / view.k)) return { kind: 'object', ref: o };
+      if (Math.hypot(x - o.x, z - o.z) < Math.max(1.4, 9 / view.k)) out.push({ kind: 'object', ref: o });
     }
     if (layers.prims) {
       for (let i = data.terrain.holes.length - 1; i >= 0; i--) {
         const m = data.terrain.holes[i];
-        if (segDist(x, z, m[0], m[2], m[4], m[6]) < m[3] + pad) return { kind: 'hole', ref: m };
+        if (segDist(x, z, m[0], m[2], m[4], m[6]) < m[3] + pad) out.push({ kind: 'hole', ref: m });
       }
       for (let i = data.terrain.mesas.length - 1; i >= 0; i--) {
         const m = data.terrain.mesas[i];
-        if (segDist(x, z, m[0], m[1], m[2], m[3]) < m[4] + pad) return { kind: 'mesa', ref: m };
+        if (segDist(x, z, m[0], m[1], m[2], m[3]) < m[4] + pad) out.push({ kind: 'mesa', ref: m });
       }
       for (let i = data.terrain.arches.length - 1; i >= 0; i--) {
         const m = data.terrain.arches[i];
-        if (Math.abs(Math.hypot(x - m[0], z - m[2]) - m[4]) < m[5] + pad) return { kind: 'arch', ref: m };
+        if (Math.abs(Math.hypot(x - m[0], z - m[2]) - m[4]) < m[5] + pad) out.push({ kind: 'arch', ref: m });
       }
       for (let i = data.terrain.clears.length - 1; i >= 0; i--) {
         const m = data.terrain.clears[i];
-        if (segDist(x, z, m[0], m[1], m[2], m[3]) < m[4] + pad) return { kind: 'clear', ref: m };
+        if (segDist(x, z, m[0], m[1], m[2], m[3]) < m[4] + pad) out.push({ kind: 'clear', ref: m });
       }
     }
     if (layers.zones) for (const k of ['gardens', 'kelp', 'magenta', 'zs', 'hot']) {
@@ -358,10 +380,10 @@
       const arr = data.zones[k];
       for (let i = arr.length - 1; i >= 0; i--) {
         const p = arr[i];
-        if (Math.hypot(x - p[0], z - p[1]) < p[2]) return { kind: 'zone', zone: k, ref: p };
+        if (Math.hypot(x - p[0], z - p[1]) < p[2]) out.push({ kind: 'zone', zone: k, ref: p });
       }
     }
-    return null;
+    return out;
   }
 
   // ---------------------------------------------------------------- selection / inspector
@@ -412,7 +434,7 @@
     let html = '';
     if (sel.kind === 'object') {
       const o = sel.ref;
-      const opts = MESH_NAMES.map((n, i) => `<option value="${i}"${i === o.mesh ? ' selected' : ''}>${i} · ${n}</option>`).join('');
+      const opts = PLACEABLE.map((i) => `<option value="${i}"${i === o.mesh ? ' selected' : ''}>${i} · ${MESH_NAMES[i]}</option>`).join('');
       html += `<div class="kind">物体 · ${MESH_NAMES[o.mesh]}</div>`;
       html += `<div class="row"><label>网格</label><select data-o="mesh">${opts}</select></div>`;
       html += row('x', 'step="0.5" data-o="x"', f(o.x));
@@ -475,6 +497,7 @@
 
   // ---------------------------------------------------------------- editing
   let draft = null, drag = null, pan = null, marquee = null, hover = [0, 0], spaceDown = false;
+  let pick = { pt: null, ref: null }; // last click, so repeated clicks at one spot cycle through overlaps
   const originOf = (h) => {
     const r = h.ref;
     return h.kind === 'object' ? [r.x, r.z] : h.kind === 'arch' ? [r[0], r[2]] : h.kind === 'zone' ? [r[0], r[1]] : [r[0], r[1], r[2], r[3]];
@@ -579,13 +602,25 @@
     }
     if (e.button !== 0) return;
     if (tool === 'select') {
-      const hit = hitTest(x, z);
-      if (!hit) {
+      const list = hitsAt(x, z);
+      if (!list.length) {
+        pick = { pt: null, ref: null };
         marquee = { a: [x, z], b: [x, z] };
         sel = null; selSet = [];
         renderProps(); draw();
         return;
       }
+      // clicking the same spot again steps to the next overlapping item, never the current one
+      const same = pick.pt && Math.hypot(x - pick.pt[0], z - pick.pt[1]) < 3 / view.k;
+      let hit = list[0];
+      if (same) {
+        const at = list.findIndex((h) => h.ref === pick.ref);
+        hit = list[(at + 1) % list.length];
+        if (list.length > 1) msg(`此处重叠 ${list.length} 个，已切到 ${kindName(hit)}`);
+      } else if (list.length > 1) {
+        msg(`此处重叠 ${list.length} 个，再点一次可切换`);
+      }
+      pick = { pt: [x, z], ref: hit.ref };
       if (!isSelRef(hit.ref)) selSet = [hit];
       sel = selSet.length === 1 ? selSet[0] : null;
       renderProps();
@@ -698,6 +733,7 @@
   // ---------------------------------------------------------------- tools / panels
   function setTool(t) {
     tool = t;
+    if (t !== 'select') pick = { pt: null, ref: null };
     for (const b of document.querySelectorAll('#tools button')) b.classList.toggle('on', b.dataset.tool === t);
     const hints = {
       select: '点击选中并拖动移动 · 空白处拖框选多个 · 属性在右侧改',
@@ -715,7 +751,8 @@
   for (const b of document.querySelectorAll('#tools button')) b.addEventListener('click', () => setTool(b.dataset.tool));
 
   const pal = $('#pal');
-  MESH_NAMES.forEach((n, i) => {
+  for (const i of PLACEABLE) {
+    const n = MESH_NAMES[i];
     const b = document.createElement('button');
     b.dataset.mesh = i;
     b.innerHTML = `<span class="eye" title="显示 / 隐藏这类物体">◉</span><span class="name">${i} ${n}</span>`;
@@ -726,7 +763,7 @@
     });
     b.addEventListener('click', () => { paletteMesh = i; setTool('obj'); syncPalette(); });
     pal.appendChild(b);
-  });
+  }
 
   const zpal = $('#zpal');
   for (const k of Object.keys(ZONE_DEFS)) {

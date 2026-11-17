@@ -558,15 +558,20 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   var P = i.a.xyz + vec3f(R * cos(ta), 1.4 * sin(t * .21 + ph), R * .7 * sin(ta));
   P.y += .45 * sin(t * .5 + ph);
   let pulse = .5 + .5 * sin(t * 1.5 + ph);
-  let u = max(i.n.w, 0.); let tu = max(-i.n.w, 0.);
+  let au = i.n.w; let bu = max(au, 0.);
+  let nA = max(-au, 0.);
+  let armT = ss(.25, .35, nA) * (1. - ss(.68, .74, nA));
+  let tentT = ss(.75, .80, nA);
   var l = i.p * sz;
-  let rim = ss(.2, 1., u); let wd = 1. - .16 * pulse * rim;
-  l.x *= wd; l.z *= wd;
-  l.y -= .11 * pulse * rim * rim;
-  l.y += sin(u * 6. + t * 1.6 + ph) * .02 * u * sz;
-  l.x += sin(t * 1.1 - tu * 3.2 + ph) * .16 * tu * sz;
-  l.z += cos(t * .9 - tu * 3.7 + ph * 1.3) * .14 * tu * sz;
-  l.y *= 1. - .16 * pulse * (1. - tu);
+  // one shared rim displacement for the bell and for anything hanging off its edge
+  let rn = min(length(i.p.xz) / .70, 1.);
+  let wr = ss(.15, .95, rn);
+  l.x *= 1. - .12 * pulse * wr;
+  l.z *= 1. - .12 * pulse * wr;
+  l.y -= .10 * pulse * sz * wr * wr;
+  l.y += sin(rn * 4.2 + t * 1.6 + ph) * .02 * rn * sz;
+  l.x += (sin(t * 1.05 - armT * 3.0 + ph) * .15 * armT + sin(t * 1.4 - tentT * 2.4 + ph) * .06 * tentT) * sz;
+  l.z += (cos(t * .9 - armT * 3.5 + ph * 1.3) * .13 * armT + cos(t * 1.2 - tentT * 2.7 + ph * 1.2) * .06 * tentT) * sz;
   let w = P + l;
   o.cp = g.vp * vec4f(w, 1.); o.wp = w; o.n = i.n.xyz; o.op = i.p; o.sd = i.b.x; o.lt = i.n.w;
   return o;
@@ -577,15 +582,26 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   let dist = length(i.wp - g.cam.xyz);
   let z = zone(i.wp); let vv = vol(i.wp); let ca = caus(i.wp, dist);
   let E = sunE(i.wp.y, z) * shadow1(i.wp);
-  let au = i.lt; let bell = ss(-.02, .06, au);
+  let au = i.lt;
+  let gon = (1. - step(-.02, au)) * step(-.21, au);
+  let arm = (1. - step(-.24, au)) * step(-.70, au);
+  let tent = 1. - step(-.74, au);
+  let bell = ss(-.01, .08, au);
   let fres = pow(1. - ndv, 2.2);
   let pulse = .5 + .5 * sin(g.cam.w * 1.5 + i.sd * 6.3);
-  let alb = mix(vec3f(.60, .46, .80), vec3f(.88, .74, .97), sat(au));
-  var c = alb * (amb(i.wp, n, vv.g, z) * 1.5 + E * (.10 + .40 * sat(dot(n, g.sun.xyz))));
-  c += vec3f(.55, .34, .95) * (.08 + .50 * fres) * (.55 + .45 * pulse) * (.4 + .6 * bell);
-  c += vec3f(.45, .75, 1.) * fres * ca * .5;
-  c += E * pow(sat(dot(n, normalize(V + g.sun.xyz))), 26.) * .55 * bell;
-  let a = mix(.15 + .26 * fres, .28 + .30 * fres, bell);
+  // nearly colourless, glassy bell with a bright rim
+  var c = vec3f(.66, .78, .84) * (amb(i.wp, n, vv.g, z) * 1.6 + E * (.12 + .45 * sat(dot(n, g.sun.xyz))));
+  c += vec3f(.55, .78, .98) * fres * (.20 + .28 * pulse) * bell;
+  c += vec3f(.52, .78, 1.) * fres * ca * .45;
+  c += E * pow(sat(dot(n, normalize(V + g.sun.xyz))), 26.) * .45 * bell;
+  // amber gonads glowing through the bell
+  let go = vec3f(1., .50, .11) * (1.05 + .50 * pulse) * (.50 + .80 * E);
+  c = mix(c, go, gon);
+  c = mix(c, vec3f(.88, .88, .84) * (.40 + .60 * E), arm * .75);
+  var a = .07 + .28 * fres;
+  a = mix(a, .65, gon);
+  a = mix(a, .18 + .30 * fres, arm);
+  a = mix(a, .10 + .18 * fres, tent);
   return vec4f(fog(c, i.wp, z) * a, a);
 }
 @fragment fn fsManta(i: VO) -> @location(0) vec4f {

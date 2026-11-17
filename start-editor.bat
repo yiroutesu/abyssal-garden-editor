@@ -12,7 +12,7 @@ if not exist "node_modules\esbuild" (
 )
 
 echo.
-echo   Editor : http://127.0.0.1:8765/editor/
+echo   Editor URL is printed on the line below (port 8765, or the next free one).
 echo   Saves rebuild abyssal-garden\index.html automatically.
 echo   Close this window to stop the server.
 echo.
