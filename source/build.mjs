@@ -14,7 +14,13 @@ const dev = process.argv.includes('--dev'), readable = dev || process.argv.inclu
 const out = dev ? 'dev.html' : 'index.html';
 if (dev) FILES.push('dev.js');
 
-let js = FILES.map((f) => readFileSync(path.join(here, 'src', f), 'utf8')).join('\n');
+// editor/world.json (written by the map editor) is inlined ahead of everything; absent means stock world
+let edit = '';
+try {
+  edit = 'const WORLD_EDIT=' + JSON.stringify(JSON.parse(readFileSync(path.join(here, '..', 'editor', 'world.json'), 'utf8'))) + ';\n';
+  console.log('using editor/world.json');
+} catch {}
+let js = edit + FILES.map((f) => readFileSync(path.join(here, 'src', f), 'utf8')).join('\n');
 const tpl = readFileSync(path.join(here, 'template.html'), 'utf8');
 // everything runs inside one async function; startup errors are shown on screen
 const wrap = (body) => `(async()=>{${body}\n})().catch(e=>{console.error(e);document.body.className='l e';document.getElementById('s').textContent=(e.cause?'':'Failed to start: ')+e.message});`;

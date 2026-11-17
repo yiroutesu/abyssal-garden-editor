@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Abyssal Garden · 地形编辑器</title>
+<style>
+  :root { --bg:#08131a; --panel:#0e1e27; --line:#1d3542; --ink:#cfe3ea; --dim:#7d9aa6; --acc:#5fd3c4; --warn:#ffb45e; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; background:var(--bg); color:var(--ink); font:12px/1.45 ui-monospace, Consolas, monospace; overflow:hidden; }
+  body { display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:12px; padding:0 12px; height:44px; background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto; }
+  header b { color:var(--acc); letter-spacing:.04em; font-weight:600; }
+  header .grow { flex:1; }
+  button { background:#122a35; color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:5px 9px; cursor:pointer; font:inherit; }
+  button:hover { border-color:#2f5a6b; background:#16333f; }
+  button.on { background:var(--acc); border-color:var(--acc); color:#06222a; }
+  input[type=number], input[type=text], select { width:100%; background:#0a1a22; color:var(--ink); border:1px solid var(--line); border-radius:3px; padding:3px 5px; font:inherit; }
+  input[type=range] { width:100%; accent-color:var(--acc); }
+  main { flex:1; display:flex; min-height:0; }
+  aside { background:var(--panel); overflow:auto; flex:0 0 auto; }
+  #left { width:214px; border-right:1px solid var(--line); padding:10px; }
+  #right { width:300px; border-left:1px solid var(--line); padding:10px; }
+  h3 { margin:12px 0 6px; font-size:11px; color:var(--dim); font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+  h3:first-child { margin-top:0; }
+  .tools { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+  .tools button { padding:5px 4px; text-align:left; }
+  .pal { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  .pal button { padding:4px 3px; text-align:left; font-size:11px; display:flex; align-items:center; gap:5px; }
+  .pal .eye { flex:0 0 auto; opacity:.75; }
+  .pal .eye:hover { color:var(--acc); }
+  .pal .off .name { opacity:.4; text-decoration:line-through; }
+  #eyeAll { width:100%; margin-top:6px; }
+  .row { display:grid; grid-template-columns:1fr 84px; gap:6px; align-items:center; margin:3px 0; }
+  .row label { color:var(--dim); }
+  .sep { height:1px; background:var(--line); margin:10px 0; }
+  #stage { position:relative; flex:1; min-width:0; cursor:crosshair; }
+  canvas { display:block; width:100%; height:100%; }
+  #hint { position:absolute; left:10px; bottom:10px; color:var(--dim); background:rgba(8,19,26,.78); border:1px solid var(--line); padding:4px 7px; border-radius:3px; pointer-events:none; white-space:pre; }
+  footer { height:26px; display:flex; gap:16px; align-items:center; padding:0 12px; border-top:1px solid var(--line); background:var(--panel); color:var(--dim); flex:0 0 auto; }
+  #msg { color:var(--acc); }
+  .chk { display:flex; gap:6px; align-items:center; margin:4px 0; color:var(--dim); }
+  .chk input { accent-color:var(--acc); }
+  .val { color:var(--acc); }
+  .empty { color:var(--dim); padding:8px 0; }
+  .kind { color:var(--acc); margin-bottom:6px; }
+  .btns { display:flex; gap:6px; margin-top:10px; }
+  .btns button { flex:1; }
+  .key { color:var(--dim); font-size:10px; }
+</style>
+</head>
+<body>
+<header>
+  <b>ABYSSAL GARDEN · 地形编辑器</b>
+  <span class="key">俯视图 · 1 m ≈ 2 px</span>
+  <span class="grow"></span>
+  <button id="save">保存到项目</button>
+  <button id="export">导出 JSON</button>
+  <button id="importBtn">导入</button><input id="importFile" type="file" accept="application/json,.json" hidden>
+  <button id="reset">恢复默认</button>
+</header>
+<main>
+  <aside id="left">
+    <h3>工具</h3>
+    <div class="tools" id="tools">
+      <button data-tool="select" class="on">选择 (V)</button>
+      <button data-tool="pan">平移 (H)</button>
+      <button data-tool="mesa">台地 (M)</button>
+      <button data-tool="arch">拱门 (A)</button>
+      <button data-tool="hole">隧道 (T)</button>
+      <button data-tool="clear">留空区 (C)</button>
+      <button data-tool="obj">放物体 (O)</button>
+      <button data-tool="zone">画区域 (Z)</button>
+    </div>
+
+    <h3>物体（点击后在地图落点）</h3>
+    <div class="pal" id="pal"></div>
+
+    <h3>区域（点击后在地图落点）</h3>
+    <div class="pal" id="zpal"></div>
+    <button id="eyeAll">全部显示</button>
+
+    <h3>批量生成</h3>
+    <div class="row"><label>海带密度</label><input id="cfgKelp" type="range" min="0" max="2" step="0.05"></div>
+    <div class="row"><label>地面植被</label><input id="cfgGround" type="range" min="0" max="2" step="0.05"></div>
+    <div class="row"><label>岩石 / 珊瑚</label><input id="cfgProps" type="range" min="0" max="2" step="0.05"></div>
+
+    <h3>图层</h3>
+    <label class="chk"><input id="lyZones" type="checkbox" checked>区域</label>
+    <label class="chk"><input id="lyPrims" type="checkbox" checked>地形图元</label>
+    <label class="chk"><input id="lyObj" type="checkbox" checked>物体</label>
+    <label class="chk"><input id="lyGrid" type="checkbox" checked>网格 / 边界</label>
+  </aside>
+  <div id="stage">
+    <canvas id="map"></canvas>
+    <div id="hint"></div>
+  </div>
+  <aside id="right">
+    <h3>属性</h3>
+    <div id="props"><div class="empty">未选中对象。<br>用选择工具点击地图上的图元、物体或区域。</div></div>
+  </aside>
+</main>
+<footer>
+  <span id="coords">x 0.0  z 0.0</span>
+  <span id="msg"></span>
+  <span class="grow" style="flex:1"></span>
+  <span>Del 删除 · Ctrl+Z 撤销 · 空白处拖框选 · 滚轮缩放 · 中键/空格拖动平移</span>
+</footer>
+
+<script src="../source/src/math.js"></script>
+<script src="../source/src/shaders.js"></script>
+<script src="../source/src/world.js"></script>
+<script src="editor.js"></script>
+</body>
+</html>

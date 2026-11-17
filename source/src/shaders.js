@@ -551,6 +551,43 @@ struct VO { @builtin(position) cp: vec4f, @location(0) wp: vec3f, @location(1) n
   o.lt = 1.;
   return o;
 }
+@vertex fn vsJelly(i: VI) -> VO {
+  var o: VO;
+  let t = g.cam.w; let ph = i.b.w * 6.3; let sz = i.b.z; let R = i.a.w;
+  let ta = t * i.b.y + ph;
+  var P = i.a.xyz + vec3f(R * cos(ta), 1.4 * sin(t * .21 + ph), R * .7 * sin(ta));
+  P.y += .45 * sin(t * .5 + ph);
+  let pulse = .5 + .5 * sin(t * 1.5 + ph);
+  let u = max(i.n.w, 0.); let tu = max(-i.n.w, 0.);
+  var l = i.p * sz;
+  let rim = ss(.2, 1., u); let wd = 1. - .16 * pulse * rim;
+  l.x *= wd; l.z *= wd;
+  l.y -= .11 * pulse * rim * rim;
+  l.y += sin(u * 6. + t * 1.6 + ph) * .02 * u * sz;
+  l.x += sin(t * 1.1 - tu * 3.2 + ph) * .16 * tu * sz;
+  l.z += cos(t * .9 - tu * 3.7 + ph * 1.3) * .14 * tu * sz;
+  l.y *= 1. - .16 * pulse * (1. - tu);
+  let w = P + l;
+  o.cp = g.vp * vec4f(w, 1.); o.wp = w; o.n = i.n.xyz; o.op = i.p; o.sd = i.b.x; o.lt = i.n.w;
+  return o;
+}
+@fragment fn fsJelly(i: VO, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
+  let n0 = normalize(i.n); let n = select(-n0, n0, ff);
+  let V = normalize(g.cam.xyz - i.wp); let ndv = sat(dot(n, V));
+  let dist = length(i.wp - g.cam.xyz);
+  let z = zone(i.wp); let vv = vol(i.wp); let ca = caus(i.wp, dist);
+  let E = sunE(i.wp.y, z) * shadow1(i.wp);
+  let au = i.lt; let bell = ss(-.02, .06, au);
+  let fres = pow(1. - ndv, 2.2);
+  let pulse = .5 + .5 * sin(g.cam.w * 1.5 + i.sd * 6.3);
+  let alb = mix(vec3f(.60, .46, .80), vec3f(.88, .74, .97), sat(au));
+  var c = alb * (amb(i.wp, n, vv.g, z) * 1.5 + E * (.10 + .40 * sat(dot(n, g.sun.xyz))));
+  c += vec3f(.55, .34, .95) * (.08 + .50 * fres) * (.55 + .45 * pulse) * (.4 + .6 * bell);
+  c += vec3f(.45, .75, 1.) * fres * ca * .5;
+  c += E * pow(sat(dot(n, normalize(V + g.sun.xyz))), 26.) * .55 * bell;
+  let a = mix(.15 + .26 * fres, .28 + .30 * fres, bell);
+  return vec4f(fog(c, i.wp, z) * a, a);
+}
 @fragment fn fsManta(i: VO) -> @location(0) vec4f {
   let dist = length(i.wp - g.cam.xyz);
   let ca = caus(i.wp, dist);
