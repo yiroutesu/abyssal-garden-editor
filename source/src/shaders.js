@@ -26,8 +26,8 @@ fn wor(p: vec3f) -> f32 {
 `;
 
 // ---------------------------------------------------------------- terrain density (compute)
-const W_DENS = W_NOISE + /*wgsl*/`
-struct U { n: vec4u, o: vec4f, c: vec4u };
+const W_DENS_FN = W_NOISE + /*wgsl*/`
+struct U { n: vec4u, o: vec4f, c: vec4u, r: vec4f };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var<storage, read_write> D: array<f32>;
 @group(0) @binding(2) var<storage, read> P: array<vec4f>;
@@ -58,9 +58,16 @@ fn dens(p: vec3f) -> f32 {
   }
   let rad = length(p.xz) + w.x * 14.;
   let n = fbm(vec3f(q.xz * .0125, 1.7), 4);
-  let ring = ss(156., 172., rad);
-  let plat = max(ss(.5, .565, n) * (1. - clr), ring);
-  let th = g0 + plat * mix(26. + 17. * fbm(vec3f(q.xz * .03, 5.), 2), 60., ring);
+  // u.n.w = procedural reef/ring enabled; off leaves the bare seabed for an empty map
+  // u.r = reef parameters from the editor: cover [0,1], plateau height, outer ring height, relief amplitude
+  var ring = 0.;
+  var plat = 0.;
+  if (u.n.w != 0u) {
+    let tk = .62 - .24 * clamp(u.r.x, 0., 1.);
+    ring = ss(156., 172., rad);
+    plat = max(ss(tk, tk + .065, n) * (1. - clr), ring);
+  }
+  let th = g0 + plat * mix(u.r.y + u.r.w * fbm(vec3f(q.xz * .03, 5.), 2), u.r.z, ring);
   var d = smax(g0 + 4.5 * ss(10., 0., de) - p.y, dm, 3.);
   d = smax(d, (th - p.y) * .7, 3.);
   k = u.c.x * 2u;
@@ -81,6 +88,34 @@ fn dens(p: vec3f) -> f32 {
   }
   return min(d, 3. - p.y);
 }
+`;
+
+// editor 2D preview: one thread per map column marches down to the first solid sample, so the height map can be
+// rendered at screen resolution without reading back a whole density volume
+const W_HEIGHT = W_DENS_FN + /*wgsl*/`
+@compute @workgroup_size(8, 8) fn mainH(@builtin(global_invocation_id) id: vec3u) {
+  if (any(id.xy >= u.n.xy)) { return; }
+  let x = u.o.x + (f32(id.x) + .5) * u.o.w;
+  let z = u.o.z + (f32(id.y) + .5) * u.o.w;
+  var h = -1e3;
+  var py = 4.;
+  var pd = dens(vec3f(x, py, z));
+  if (pd > 0.) {
+    h = py;
+  } else {
+    for (var i = 0; i < 16; i++) {
+      let y = py - 4.;
+      if (y < -58.) { break; }
+      let d = dens(vec3f(x, y, z));
+      if (d > 0.) { h = mix(py, y, pd / (pd - d)); break; }
+      py = y; pd = d;
+    }
+  }
+  D[id.x + u.n.x * id.y] = h;
+}
+`;
+
+const W_DENS = W_DENS_FN + /*wgsl*/`
 @compute @workgroup_size(4, 4, 4) fn main(@builtin(global_invocation_id) id: vec3u) {
   if (any(id >= u.n.xyz)) { return; }
   var d = dens(u.o.xyz + vec3f(id) * u.o.w);

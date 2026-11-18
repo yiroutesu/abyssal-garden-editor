@@ -47,12 +47,13 @@
   .btns { display:flex; gap:6px; margin-top:10px; }
   .btns button { flex:1; }
   .key { color:var(--dim); font-size:10px; }
+  .note { color:var(--dim); font-size:10px; margin:6px 0 0; line-height:1.5; }
 </style>
 </head>
 <body>
 <header>
   <b>ABYSSAL GARDEN · 地形编辑器</b>
-  <span class="key">俯视图 · 1 m ≈ 2 px</span>
+  <span class="key" id="zoomInfo">俯视图 · 1 m ≈ 2 px</span>
   <span class="grow"></span>
   <button id="save">保存到项目</button>
   <button id="export">导出 JSON</button>
@@ -70,25 +71,39 @@
       <button data-tool="hole">隧道 (T)</button>
       <button data-tool="clear">留空区 (C)</button>
       <button data-tool="obj">放物体 (O)</button>
+      <button data-tool="wall">围墙 (W)</button>
       <button data-tool="zone">画区域 (Z)</button>
+      <button data-tool="spawn">生物群 (B)</button>
     </div>
 
     <h3>物体（点击后在地图落点）</h3>
     <div class="pal" id="pal"></div>
 
-    <h3>区域（点击后在地图落点）</h3>
+    <h3>生物区域（点击后在地图落点）</h3>
     <div class="pal" id="zpal"></div>
+
+    <h3>生物群落（点击后在地图落点）</h3>
+    <div class="pal" id="spal"></div>
     <button id="eyeAll">全部显示</button>
 
     <h3>批量生成</h3>
     <div class="row"><label>海带密度</label><input id="cfgKelp" type="range" min="0" max="2" step="0.05"></div>
     <div class="row"><label>地面植被</label><input id="cfgGround" type="range" min="0" max="2" step="0.05"></div>
     <div class="row"><label>岩石 / 珊瑚</label><input id="cfgProps" type="range" min="0" max="2" step="0.05"></div>
+    <label class="chk"><input id="cfgNoise" type="checkbox">程序化礁石 / 外圈崖壁</label>
+    <div class="row"><label>礁石覆盖率</label><input id="cfgReefCover" type="range" min="0" max="1" step="0.01"></div>
+    <div class="row"><label>礁石高度</label><input id="cfgReefHeight" type="range" min="0" max="2" step="0.05"></div>
+    <div class="row"><label>外圈崖壁高度</label><input id="cfgReefRing" type="range" min="0" max="120" step="5"></div>
+    <div class="note">2D 预览：越低越亮（浅青）· 越高越深（近黑），深色阶梯线约每 4 m 一条</div>
+    <label class="chk"><input id="cfgColumns" type="checkbox">视野海带柱</label>
+    <label class="chk"><input id="cfgBoulders" type="checkbox">浮动漂石</label>
+    <label class="chk"><input id="cfgDebris" type="checkbox">地面碎石 / 卵石</label>
 
     <h3>图层</h3>
-    <label class="chk"><input id="lyZones" type="checkbox" checked>区域</label>
-    <label class="chk"><input id="lyPrims" type="checkbox" checked>地形图元</label>
-    <label class="chk"><input id="lyObj" type="checkbox" checked>物体</label>
+    <label class="chk"><input id="lyPrims" type="checkbox" checked>地形（台地 / 拱门 / 隧道 / 留空区）</label>
+    <label class="chk"><input id="lyZones" type="checkbox" checked>生物区域（海带 / 珊瑚 / 园圃）</label>
+    <label class="chk"><input id="lySpawns" type="checkbox" checked>生物群落（鱼群 / 蝠鲼 / 水母）</label>
+    <label class="chk"><input id="lyObj" type="checkbox" checked>物体（房屋 / 围墙 / 沉船）</label>
     <label class="chk"><input id="lyGrid" type="checkbox" checked>网格 / 边界</label>
   </aside>
   <div id="stage">
@@ -107,6 +122,7 @@
   <span>Del 删除 · Ctrl+Z 撤销 · 空白处拖框选 · 滚轮缩放 · 中键/空格拖动平移</span>
 </footer>
 
+<script src="../source/src/quality.js"></script>
 <script src="../source/src/math.js"></script>
 <script src="../source/src/shaders.js"></script>
 <script src="../source/src/world.js"></script>

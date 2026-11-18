@@ -49,15 +49,31 @@ const HOT = [[0, 5, 30], [42, 30, 24], [6, 82, 34], [-58, 10, 24], [4, -88, 30],
 const ZS = [[-58, 8, 30, 1], [0, 0, 30, 0.7], [6, 84, 36, 0.9], [4, -88, 22, 0.6], [44, 20, 24, 0.5]];
 const GARDENS = [[-68, -6, 9, 260], [-66, 6, 7, 160], [16, 72, 7, 200], [-6, 74, 6, 120], [-13, -2, 6, 80], [8, -88, 8, 160], [44, 12, 7, 120], [-62, 22, 6, 140], [-47, 40, 6, 140], [-30, 47, 6, 120], [-12, 48, 5, 100], [14, 28, 6, 140], [28, 45, 6, 120], [-36, -76, 6, 130], [-49, -58, 6, 130], [-58, -38, 6, 120]];
 
+// ---------------------------------------------------------------- editable creature spawns
+// fish school: cx, cy, cz, orbit radius, count, speed, direction
+const FISH_SCHOOLS = [[-2, -36, -10, 15, 520, 0.3, 1, 0.945], [8, -30, -70, 22, 420, 0.32, -1], [48, -30, 14, 18, 360, 0.3, 1], [-58, -30, -8, 11, 420, 0.28, -1, 0.3], [8, -36, 84, 16, 320, 0.28, 1],
+  [-90, -28, -70, 25, 300, 0.3, 1], [95, -30, 70, 25, 300, 0.3, -1], [0, -22, 20, 30, 380, 0.34, -1], [-30, -30, -100, 18, 300, 0.3, 1], [16, -36, 30, 12, 300, 0.3, 1], [-48, -34, -58, 12, 300, 0.3, -1], [-45, -35, 38, 14, 320, 0.3, 1]];
+// manta path: cx, cy, cz, orbit radius, phase, speed, size, wobble
+const MANTA_PATHS = [[1, -28, 3.5, 14, 3.012, 0.085, 3.6, 0.1], [49, -31, 24.5, 5, 0.029, -0.08, 3.7, 0.4], [0, -14, -80, 34, 0.3, 0.06, 5.2, 0.7], [-50, -18, 20, 26, 5, -0.075, 3.8, 0.55], [10, -16, 86, 26, 2.2, 0.07, 4.4, 0.85], [20, -11, -20, 46, 4.2, -0.045, 5.6, 0.25]];
+// jellyfish swarm: cx, cy, cz, count, spread
+const JELLY_SWARM = [[-4, -25, -2, 6, 13], [54, -24, 8, 5, 11], [-1, -24, -98, 6, 14], [1, -24, 90, 3, 8]];
+
 // ---------------------------------------------------------------- editor overrides
 // build.mjs inlines editor/world.json here as WORLD_EDIT; the editor page itself has no WORLD_EDIT.
-const CFG = { kelp: 1, ground: 1, props: 1 };
+const CFG = { kelp: 1, ground: 1, props: 1, reefCover: 0.5, reefHeight: 1, reefRing: 60 };
 if (typeof WORLD_EDIT !== 'undefined') {
   const E = WORLD_EDIT;
   const fill = (a, b) => { if (!b) return; a.length = 0; a.push(...b); };
   if (E.terrain) { fill(MESAS, E.terrain.mesas); fill(ARCHES, E.terrain.arches); fill(HOLES, E.terrain.holes); fill(CLEARS, E.terrain.clears); }
   if (E.zones) { fill(HOT, E.zones.hot); fill(ZS, E.zones.zs); fill(MAGENTA, E.zones.magenta); fill(KELPZ, E.zones.kelp); fill(GARDENS, E.zones.gardens); }
+  if (E.spawns) { fill(FISH_SCHOOLS, E.spawns.fish); fill(MANTA_PATHS, E.spawns.mantas); fill(JELLY_SWARM, E.spawns.jellies); }
   if (E.cfg) Object.assign(CFG, E.cfg);
+}
+// hard-coded decor (reef noise, framing kelp, boulders, rubble) follows the authored content
+// unless world.json says otherwise: an emptied map must really be empty
+{
+  const authored = MESAS.length + ARCHES.length + HOLES.length || (typeof WORLD_EDIT !== 'undefined' && WORLD_EDIT.objects ? WORLD_EDIT.objects.length : 1);
+  for (const k of ['noise', 'columns', 'boulders', 'debris']) if (CFG[k] == null) CFG[k] = authored ? 1 : 0;
 }
 
 function primBuffer() {
@@ -173,7 +189,7 @@ function makeWorld(D, T, flyPts, POSES) {
   const NOKELP = [[-5, -106.5, 8], [4.6, -109.4, 10], [14.2, -112.3, 12], [-26, -100, 6], [-20.5, -101.7, 4.5], [-14.8, -104.5, 6], [-7.5, -107.8, 7], [4, 112, 11], [2, 4, 15], [42, 22, 12], [6, 78, 19], [-58, -16, 8], [9, -66, 9], [8, -76, 8]];
   const kelpDens = (x, z) => {
     for (const p of NOKELP) if (hypot(x - p[0], z - p[1]) < p[2]) return 0;
-    let d = sstep(0.52, 0.64, fbm(x * 0.022, 4, z * 0.022, 3)) * 0.5;
+    let d = KELPZ.length ? sstep(0.52, 0.64, fbm(x * 0.022, 4, z * 0.022, 3)) * 0.5 : 0;
     for (const p of KELPZ) d = max(d, p[3] * sstep(p[2], p[2] * 0.75, hypot(x - p[0], z - p[1])));
     return d;
   };
@@ -192,7 +208,7 @@ function makeWorld(D, T, flyPts, POSES) {
     column(x, y - 0.3, z, min(f[i + 1] - rr(0.8, 5), force ? rr(30, 42) : rr(15, 40)), kind, dens);
   };
   // hand-placed columns framing the viewpoints: x, z, kind, density
-  for (const p of [[...rel(0, 11, -8.5), 0], [...rel(0, 16, -10.5), 0], [...rel(0, 21, -9), 0], [...rel(0, 9, 7), 0], [...rel(0, 14, 9.5), 0], [...rel(0, 19, 8), 0], [...rel(0, 26, 6), 0],
+  if (CFG.columns) for (const p of [[...rel(0, 11, -8.5), 0], [...rel(0, 16, -10.5), 0], [...rel(0, 21, -9), 0], [...rel(0, 9, 7), 0], [...rel(0, 14, 9.5), 0], [...rel(0, 19, 8), 0], [...rel(0, 26, 6), 0],
     [...rel(5, 6.5, 5.2), 1], [...rel(5, 12, 7), 1], [...rel(5, 15, -8), 0], [...rel(5, 22, -5), 1], [...rel(3, 12, -5.5), 0], [...rel(3, 16, 5.5), 0], [...rel(3, 20, -4.5), 0], [...rel(3, 25, 6), 0], [...rel(3, 13, 8), 0], [...rel(3, 30, -7), 0], [24, 62, 1], [-6, 96, 1], [20, 96, 2], [-10, 70, 0], [16, 52, 1],
     [...rel(4, 15, -9), 0, 1.2], [...rel(4, 19, -13), 0, 1.2], [...rel(4, 23, -8.5), 0, 1.2], [...rel(4, 25, -15), 0, 1.2],
     [...rel(4, 25, 0.5), 2, 1.2], [...rel(4, 27, -3), 2, 1.2], [...rel(4, 28, 3.5), 2, 1.2], [...rel(4, 31, 0), 0, 1.3], [...rel(4, 33, -5), 0, 1.3], [...rel(4, 33, 5), 0, 1.3], [...rel(4, 21, 9), 0, 1.2], [...rel(4, 27, 11), 0, 1.2],
@@ -212,12 +228,12 @@ function makeWorld(D, T, flyPts, POSES) {
       leaf(big, x + cos(a) * r, y - 0.15, z + sin(a) * r, L, a, rr(0.05, tmax), rr(wmin, wmax), sway, type, rnd(), rnd(), rr(0.3, 0.8));
     }
   };
-  const hot = (x, z) => { let h = 0.4; for (const p of HOT) h = max(h, sstep(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1]))); return h; };
+  const hot = (x, z) => { let h = HOT.length ? 0.4 : 0; for (const p of HOT) h = max(h, sstep(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1]))); return h; };
   rseed(3);
   for (let i = 0; i < 40000 * CFG.ground; i++) {
     const k = pickV(), x = T.wp[k], y = T.wp[k + 1], z = T.wp[k + 2], ny = T.wn[k + 1];
     if (hypot(x, z) > 172 || y > -6) continue;
-    const h = hot(x, z), zp = zoneP(x, z), u = rnd();
+    const h = hot(x, z), zp = HOT.length || ZS.length || MAGENTA.length || KELPZ.length || GARDENS.length ? zoneP(x, z) : 0, u = rnd();
     if (nearFly(x, y, z, 4) || hypot(x + 1, z - 2) < 9 || nearPose(x, z, 8)) continue;
     if (ny > 0.75 && u < 0.10 * h) cluster(x, y, z, 8 + rnd() * 14 | 0, 2, 1.0, 3.0, 0.13, 0.26, 0.6, 2.5);
     else if (ny > 0.6 && u < 0.10 * h + 0.07 * max(zp, h * 0.4)) cluster(x, y, z, 10 + rnd() * 18 | 0, rnd() < 0.8 ? 3 : 4, 0.9, 2.6, 0.14, 0.28, 0.9, 1.5);
@@ -254,7 +270,7 @@ function makeWorld(D, T, flyPts, POSES) {
 
   // --- sponges and coral (clustered on rock)
   const spots = [];
-  const zw = (x, z) => { let h = 0.45; for (const p of ZS) h = max(h, p[3] * sstep(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1]))); return h; };
+  const zw = (x, z) => { let h = ZS.length || GARDENS.length ? 0.45 : 0; for (const p of ZS) h = max(h, p[3] * sstep(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1]))); return h; };
   rseed(6);
   for (let i = 0; i < 13000 * CFG.props; i++) {
     const k = pickV(), x = T.wp[k], y = T.wp[k + 1], z = T.wp[k + 2];
@@ -286,36 +302,40 @@ function makeWorld(D, T, flyPts, POSES) {
   }
   // --- rocks: floating boulder clusters + scattered ground rocks
   const BOULD = [[-11, -11, -105, 14, 5], [-56, -19, -18, 18, 6], [10, -13, -88, 22, 7], [24, -15, -24, 22, 7], [-18, -12, 4, 14, 6], [30, -14, 30, 16, 6], [36, -12, -70, 22, 8], [-30, -13, -84, 16, 7], [-58, -14, 0, 14, 6], [19, -13, 98, 18, 6], [62, -9, 34, 14, 6]];
-  rseed(8);
-  for (let i = 0; i < 9; i++) { const a = rnd() * TAU, r = rr(60, 150); BOULD.push([cos(a) * r, rr(-20, -9), sin(a) * r, 10 + rnd() * 12 | 0, rr(5, 9)]); }
-  for (const b of BOULD) for (let i = 0; i < b[3]; i++) {
-    const sc = rnd() < 0.12 ? rr(1.8, 3.2) : rr(0.35, 1.5);
-    const x = b[0] + rr(-1, 1) * b[4], y = b[1] + rr(-1, 1) * b[4] * 0.6, z = b[2] + rr(-1, 1) * b[4];
-    if (Dw(x, y, z) > -sc) continue;
-    const bob = rr(0.12, 0.4), sd = rnd();
-    solid(rnd() * 4 | 0, x, min(y, -2 - sc), z, sc, qRand(), 1, sd, 1, bob);
-    if (sc > 1.1) for (let j = 0; j < 7; j++) solid(rnd() * 4 | 0, x + rr(-1.6, 1.6) * sc, min(y, -2 - sc) + rr(-1.4, 1) * sc, z + rr(-1.6, 1.6) * sc, rr(0.1, 0.35), qRand(), 1, sd, 1, bob);
+  if (CFG.boulders) {
+    rseed(8);
+    for (let i = 0; i < 9; i++) { const a = rnd() * TAU, r = rr(60, 150); BOULD.push([cos(a) * r, rr(-20, -9), sin(a) * r, 10 + rnd() * 12 | 0, rr(5, 9)]); }
+    for (const b of BOULD) for (let i = 0; i < b[3]; i++) {
+      const sc = rnd() < 0.12 ? rr(1.8, 3.2) : rr(0.35, 1.5);
+      const x = b[0] + rr(-1, 1) * b[4], y = b[1] + rr(-1, 1) * b[4] * 0.6, z = b[2] + rr(-1, 1) * b[4];
+      if (Dw(x, y, z) > -sc) continue;
+      const bob = rr(0.12, 0.4), sd = rnd();
+      solid(rnd() * 4 | 0, x, min(y, -2 - sc), z, sc, qRand(), 1, sd, 1, bob);
+      if (sc > 1.1) for (let j = 0; j < 7; j++) solid(rnd() * 4 | 0, x + rr(-1.6, 1.6) * sc, min(y, -2 - sc) + rr(-1.4, 1) * sc, z + rr(-1.6, 1.6) * sc, rr(0.1, 0.35), qRand(), 1, sd, 1, bob);
+    }
   }
-  rseed(9);
-  for (let i = 0; i < 2600 * CFG.props; i++) {
-    const k = pickV(); if (T.wn[k + 1] < 0.7 || hypot(T.wp[k], T.wp[k + 2]) > 170 || nearFly(T.wp[k], T.wp[k + 1], T.wp[k + 2], 6)) continue;
-    const sc = rr(0.25, 1.3) * (rnd() < 0.1 ? 2 : 1);
-    solid(rnd() * 4 | 0, T.wp[k], T.wp[k + 1] + sc * 0.2, T.wp[k + 2], sc, qRand(), 1, rnd(), 1, 0);
-  }
+  if (CFG.debris) {
+    rseed(9);
+    for (let i = 0; i < 2600 * CFG.props; i++) {
+      const k = pickV(); if (T.wn[k + 1] < 0.7 || hypot(T.wp[k], T.wp[k + 2]) > 170 || nearFly(T.wp[k], T.wp[k + 1], T.wp[k + 2], 6)) continue;
+      const sc = rr(0.25, 1.3) * (rnd() < 0.1 ? 2 : 1);
+      solid(rnd() * 4 | 0, T.wp[k], T.wp[k + 1] + sc * 0.2, T.wp[k + 2], sc, qRand(), 1, rnd(), 1, 0);
+    }
 
-  rseed(10);
-  for (let i = 0; i < 60000 * CFG.props; i++) {
-    const k = pickV(), x = T.wp[k], y = T.wp[k + 1], z = T.wp[k + 2], ny = T.wn[k + 1];
-    if (hypot(x, z) > 172 || y > -3 || (ny > 0.8 && rnd() < 0.6) || nearFly(x, y, z, 3.5)) continue;
-    const sc = (0.35 + 2.1 * pow(rnd(), 2.6)) * (ny > 0.8 ? 0.5 : 1), q = qRand();
-    chunks[(sc > 1.15 ? 3 : 0) + (rnd() * 3 | 0)][cellOf(x, z)].push(x - T.wn[k] * sc * 0.3, y - ny * sc * 0.3, z - T.wn[k + 2] * sc * 0.3, sc, q[0], q[1], q[2], q[3], 1, rnd(), sc > 1.15 ? 0 : 96, 0);
-  }
-  rseed(11);
-  for (let i = 0; i < 170000 * CFG.props; i++) { // pebbles and rubble on the sea floor
-    const k = pickV(), x = T.wp[k] + rr(-0.4, 0.4), z = T.wp[k + 2] + rr(-0.4, 0.4), y = T.wp[k + 1];
-    if (T.wn[k + 1] < 0.8 || hypot(x, z) > 170 || nearFly(x, y, z, 1.3)) continue;
-    const sc = 0.05 + 0.3 * pow(rnd(), 2), q = qRand();
-    nth++ % THIN || chunks[6][cellOf(x, z)].push(x, y - sc * 0.25, z, sc, q[0], q[1], q[2], q[3], 1, rnd(), 44, 0);
+    rseed(10);
+    for (let i = 0; i < 60000 * CFG.props; i++) {
+      const k = pickV(), x = T.wp[k], y = T.wp[k + 1], z = T.wp[k + 2], ny = T.wn[k + 1];
+      if (hypot(x, z) > 172 || y > -3 || (ny > 0.8 && rnd() < 0.6) || nearFly(x, y, z, 3.5)) continue;
+      const sc = (0.35 + 2.1 * pow(rnd(), 2.6)) * (ny > 0.8 ? 0.5 : 1), q = qRand();
+      chunks[(sc > 1.15 ? 3 : 0) + (rnd() * 3 | 0)][cellOf(x, z)].push(x - T.wn[k] * sc * 0.3, y - ny * sc * 0.3, z - T.wn[k + 2] * sc * 0.3, sc, q[0], q[1], q[2], q[3], 1, rnd(), sc > 1.15 ? 0 : 96, 0);
+    }
+    rseed(11);
+    for (let i = 0; i < 170000 * CFG.props; i++) { // pebbles and rubble on the sea floor
+      const k = pickV(), x = T.wp[k] + rr(-0.4, 0.4), z = T.wp[k + 2] + rr(-0.4, 0.4), y = T.wp[k + 1];
+      if (T.wn[k + 1] < 0.8 || hypot(x, z) > 170 || nearFly(x, y, z, 1.3)) continue;
+      const sc = 0.05 + 0.3 * pow(rnd(), 2), q = qRand();
+      nth++ % THIN || chunks[6][cellOf(x, z)].push(x, y - sc * 0.25, z, sc, q[0], q[1], q[2], q[3], 1, rnd(), 44, 0);
+    }
   }
   // --- set pieces
   const gy = (x, z) => { const f = floorsAt(x, z); return f.length ? f[f.length - 2] : -45; };
@@ -328,9 +348,11 @@ function makeWorld(D, T, flyPts, POSES) {
     solid(o.mesh | 0, o.x, o.y == null ? gy(o.x, o.z) : o.y, o.z, o.scale == null ? 1 : o.scale, q, o.mat == null ? 1 : o.mat, o.seed == null ? 0 : o.seed, o.ts == null ? 1 : o.ts, o.bob || 0);
   }
   // barrel sponges in front of viewpoint 4, small sponges around the fluke base
-  rseed(12);
-  for (const b of [[7, 3.2, 1.3, 4], [8.4, 4.6, 1.0, 6], [9.6, 2.6, 1.5, 4], [11, 5, 1.1, 5], [8, -3.6, 1.2, 4], [12.5, 2, 1.2, 6], [9, 3.9, 0.8, 4]]) { const p = rel(3, b[0], b[1]), c = POSES[3]; let ux = (c[0] - p[0]) * 0.07, uz = (c[2] - p[1]) * 0.07; const l = hypot(ux, 1, uz); solid(b[3], p[0], gy(p[0], p[1]) - 0.1, p[1], b[2], qFromY(ux / l, 1 / l, uz / l), 4, rnd(), 1, 0); }
-  for (let i = 0; i < 9; i++) { const a = rnd() * TAU; const x = -5 + cos(a) * rr(1.2, 2.6), z = -4 + sin(a) * rr(1.5, 4); solid(6, x, gy(x, z) + 0.05, z, rr(0.4, 0.9), qAxis(0, 1, 0, rnd() * 6), 4, rnd(), 1, 0); }
+  if (CFG.props && !(typeof WORLD_EDIT !== 'undefined' && !HOT.length && !ZS.length && !GARDENS.length)) {
+    rseed(12);
+    for (const b of [[7, 3.2, 1.3, 4], [8.4, 4.6, 1.0, 6], [9.6, 2.6, 1.5, 4], [11, 5, 1.1, 5], [8, -3.6, 1.2, 4], [12.5, 2, 1.2, 6], [9, 3.9, 0.8, 4]]) { const p = rel(3, b[0], b[1]), c = POSES[3]; let ux = (c[0] - p[0]) * 0.07, uz = (c[2] - p[1]) * 0.07; const l = hypot(ux, 1, uz); solid(b[3], p[0], gy(p[0], p[1]) - 0.1, p[1], b[2], qFromY(ux / l, 1 / l, uz / l), 4, rnd(), 1, 0); }
+    for (let i = 0; i < 9; i++) { const a = rnd() * TAU; const x = -5 + cos(a) * rr(1.2, 2.6), z = -4 + sin(a) * rr(1.5, 4); solid(6, x, gy(x, z) + 0.05, z, rr(0.4, 0.9), qAxis(0, 1, 0, rnd() * 6), 4, rnd(), 1, 0); }
+  }
 
   // --- bubbles
   const VENTS = [[4, -44, -3], [4.5, -44, -3.5], [-1, -44, 2], [2, -44, -1], [5.5, -44, -7], [3, -44, -9], [6, -44, -90], [8, -44, -84], [4, -44, -93], [-9, -44, 3], [5, -35, -86], [9, -37, -92], [40, -44, 20], [-56, -44, 12], [10, -44, 80], [-2, -44, 30], [0, -44, -30], [12, -44, 2], [6, -44, -2], [46, -44, 30], [-20, -44, -103], [-52, -44, -12], [4, -44, 70], [9, -44, -74], [4, -44, -78], [14, -44, 26], [26, -44, 40], [-45, -44, -64], [-55, -44, -40], [-58, -44, 22], [-40, -44, 40], [-14, -44, 45], [-1, -44, -9], [-7, -44, -6]];
@@ -387,18 +409,17 @@ function makeWorld(D, T, flyPts, POSES) {
   // --- fish schools + mantas
   const fish = [];
   rseed(14);
-  const SCH = [[-2, -36, -10, 15, 520, 0.3, 1, 0.945], [8, -30, -70, 22, 420, 0.32, -1], [48, -30, 14, 18, 360, 0.3, 1], [-58, -30, -8, 11, 420, 0.28, -1, 0.3], [8, -36, 84, 16, 320, 0.28, 1],
-    [-90, -28, -70, 25, 300, 0.3, 1], [95, -30, 70, 25, 300, 0.3, -1], [0, -22, 20, 30, 380, 0.34, -1], [-30, -30, -100, 18, 300, 0.3, 1], [16, -36, 30, 12, 300, 0.3, 1], [-48, -34, -58, 12, 300, 0.3, -1], [-45, -35, 38, 14, 320, 0.3, 1]];
+  const SCH = FISH_SCHOOLS;
   for (const s of SCH) { const ss = s[7] === undefined ? rnd() : s[7]; for (let i = 0; i < s[4]; i++) fish.push(s[0], s[1], s[2], s[3], rnd(), s[6] * 1.9 / s[3], s[5], ss); }
   const mantas = [];
-  for (const m of [[1, -28, 3.5, 14, 3.012, 0.085, 3.6, 0.1], [49, -31, 24.5, 5, 0.029, -0.08, 3.7, 0.4], [0, -14, -80, 34, 0.3, 0.06, 5.2, 0.7], [-50, -18, 20, 26, 5, -0.075, 3.8, 0.55], [10, -16, 86, 26, 2.2, 0.07, 4.4, 0.85], [20, -11, -20, 46, 4.2, -0.045, 5.6, 0.25]]) mantas.push(...m);
+  for (const m of MANTA_PATHS) mantas.push(...m);
 
   // --- jellyfish: loose swarms, but every member drifts on its own orbit, so a group gathers
   // without ever moving as one body
   const jellies = [];
   rseed(15);
-  const SWARM = [[-4, -25, -2, 6, 13], [54, -24, 8, 5, 11], [-1, -24, -98, 6, 14], [1, -24, 90, 3, 8]];
-  for (const [cx, cy, cz, n, sp] of SWARM) {
+  for (const s of JELLY_SWARM) {
+    const [cx, cy, cz, n, sp] = s;
     for (let i = 0; i < n; i++) {
       const an = rnd() * TAU, r = sqrt(rnd()) * sp;
       const x = cx + cos(an) * r, z = cz + sin(an) * r, y = cy + (rnd() - .5) * 5;
@@ -412,7 +433,7 @@ function makeWorld(D, T, flyPts, POSES) {
   for (let i = 0; i < snow.length; i++) snow[i] = rnd();
 
   const sol = { data: [], ranges: [] }; let si = 0;
-  for (let m = 0; m < 28; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
+  for (let m = 0; m < 29; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
   const packC = (L) => {
     let n = 0; const start = new Uint32Array(nCells + 1);
     for (let c = 0; c < nCells; c++) { start[c] = n; n += L[c].length / 12; }
@@ -612,17 +633,31 @@ function meshHouse() {
     const x = rr(-3.5, 4.5), z = rr(2.4, 5.4), an = rr(-.6, .6);
     m.sweep([[x, .16, z], [x + cos(an) * rr(1.2, 2.4), .3 + rr(-.1, .15), z + sin(an) * rr(1.2, 2.4)]], .09, .34, up);
   }
-  // --- low perimeter wall around the plot, with a gap for the gate
-  wall(-6.6, -4.9, 6.6, -4.9, .8, 1);
-  wall(-6.6, -4.9, -6.6, 4.9, .72, 1, [.5, .62]);
-  wall(6.6, -4.9, 6.6, 4.9, .7, .92);
-  wall(-6.6, 4.9, -1.2, 4.9, .74, 1);
-  wall(.5, 4.9, 6.6, 4.9, .66, .88);
   // --- fallen stones and rubble
   for (let i = 0; i < 24; i++) {
-    const an = rnd() * TAU, r = rr(3.4, 6.4), x = cos(an) * r, z = sin(an) * r;
+    const an = rnd() * TAU, r = rr(3.4, 5.6), x = cos(an) * r, z = sin(an) * r;
     if (abs(x) < 4.5 && abs(z) < 3.6) continue;
     block(x, rr(.06, .2), z, rr(.35, .7), rnd() < .5 ? 0 : 1);
+  }
+  return m;
+}
+
+// one 4 m section of ruined stone wall (local x is the length), so a fence is built by placing
+// sections end to end at the yaw of the drawn line
+function meshWall() {
+  rseed(311);
+  const m = new Mesh(), up = () => [0, 1, 0];
+  for (let i = 0; i < 6; i++) {
+    const x = mix(-2, 2, i / 5);
+    const hh = .86 * (.55 + .5 * fbm(i * 1.3, 5, 2.1, 2));
+    for (let y = .14; y < hh; y += .29) {
+      if (y > .4 && rnd() < .1) continue;
+      m.sweep([[x - .33, y, rr(-.04, .04)], [x + .33, y, rr(-.04, .04)]], .42, .28, up);
+    }
+  }
+  for (let i = 0; i < 4; i++) {   // capstones knocked off the top
+    const x = rr(-1.9, 1.9);
+    m.sweep([[x, .1, rr(.6, 1.2)], [x + rr(.25, .45), rr(.12, .22), rr(.7, 1.4)]], .30, .20, up);
   }
   return m;
 }
