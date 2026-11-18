@@ -3,7 +3,7 @@
 **A dreamy underwater world you can swim through, right in your browser.**
 
 Towering kelp forests, sunbeams pouring through a rippling surface, a sunken ship, manta rays gliding overhead.
-And all of it is made by code: no images, no 3D models, no sound files. The whole world fits in **one 96 KB HTML file**.
+And all of it is made by code: no images, no 3D models, no sound files. The whole world fits in **one 110 KB HTML file**.
 
 ![Kelp forest with a stone whale tail and a manta ray](.github/screenshots/whale-fluke.jpg)
 
@@ -83,6 +83,21 @@ This writes a new `index.html` next to this README. `npm run build:readable` wri
 
 `npm run build:dev` writes a separate `dev.html` with two extra tools that are not part of `index.html`: `F` flies the camera along a one-minute path through the whole world, and `B` runs that flight as a benchmark and reports frame and GPU times.
 
+### World editor
+
+A small top-down map editor lives in [`editor`](editor). Start it from this folder:
+
+```bash
+node editor/serve.mjs        # or double-click start-editor.bat on Windows
+```
+
+It serves <http://127.0.0.1:8765/editor/> and opens the page. The 2D preview is shaded by height: lower ground is light, higher rock is darker, with contour steps about every 4 m.
+
+- **Tools:** select, pan, rock mass, arch, tunnel, clearing, object, wall line, zone and creature spawn. Objects are placed by dragging, and the drag direction sets their facing.
+- **Layers:** the right panel hides whole categories (terrain, zones, spawns, objects, grid); the eye on a palette entry hides just that one type.
+- **Batch sliders:** charophyte density and size, ground cover, rocks and corals, and the procedural reef (coverage, height, outer cliff).
+- **Save** writes `editor/world.json` and rebuilds `index.html` for you.
+
 | File | What's inside |
 |---|---|
 | [`source/src/world.js`](source/src/world.js) | The world layout: rock walls, arches, tunnels, kelp forests, sponge gardens, fish schools, mantas, the ship and the whale tail. **A good place to start.** |
@@ -92,7 +107,7 @@ This writes a new `index.html` next to this README. `npm run build:readable` wri
 | [`source/src/quality.js`](source/src/quality.js) | The detail levels: which one a device starts on, and what is remembered between visits |
 | [`source/src/math.js`](source/src/math.js) | Noise, random numbers and mesh-building helpers |
 | [`source/src/dev.js`](source/src/dev.js) | Development tools (fly-through and benchmark), only in `dev.html` |
-| [`source/template.html`](source/template.html) | The page around the scene: loading bar, start menu, links and their styles |
+| [`source/template.html`](source/template.html) | The page around the scene: loading bar, start menu and their styles |
 
 Some easy first tweaks:
 
