@@ -87,7 +87,8 @@
     <button id="eyeAll">全部显示</button>
 
     <h3>批量生成</h3>
-    <div class="row"><label>海带密度</label><input id="cfgKelp" type="range" min="0" max="2" step="0.05"></div>
+    <div class="row"><label>轮藻密度</label><input id="cfgKelp" type="range" min="0" max="2" step="0.05"></div>
+    <div class="row"><label>轮藻大小</label><input id="cfgKelpSize" type="range" min="0.3" max="3" step="0.05"></div>
     <div class="row"><label>地面植被</label><input id="cfgGround" type="range" min="0" max="2" step="0.05"></div>
     <div class="row"><label>岩石 / 珊瑚</label><input id="cfgProps" type="range" min="0" max="2" step="0.05"></div>
     <label class="chk"><input id="cfgNoise" type="checkbox">程序化礁石 / 外圈崖壁</label>
@@ -95,13 +96,13 @@
     <div class="row"><label>礁石高度</label><input id="cfgReefHeight" type="range" min="0" max="2" step="0.05"></div>
     <div class="row"><label>外圈崖壁高度</label><input id="cfgReefRing" type="range" min="0" max="120" step="5"></div>
     <div class="note">2D 预览：越低越亮（浅青）· 越高越深（近黑），深色阶梯线约每 4 m 一条</div>
-    <label class="chk"><input id="cfgColumns" type="checkbox">视野海带柱</label>
+    <label class="chk"><input id="cfgColumns" type="checkbox">视野轮藻丛</label>
     <label class="chk"><input id="cfgBoulders" type="checkbox">浮动漂石</label>
     <label class="chk"><input id="cfgDebris" type="checkbox">地面碎石 / 卵石</label>
 
     <h3>图层</h3>
     <label class="chk"><input id="lyPrims" type="checkbox" checked>地形（台地 / 拱门 / 隧道 / 留空区）</label>
-    <label class="chk"><input id="lyZones" type="checkbox" checked>生物区域（海带 / 珊瑚 / 园圃）</label>
+    <label class="chk"><input id="lyZones" type="checkbox" checked>生物区域（轮藻 / 珊瑚 / 园圃）</label>
     <label class="chk"><input id="lySpawns" type="checkbox" checked>生物群落（鱼群 / 蝠鲼 / 水母）</label>
     <label class="chk"><input id="lyObj" type="checkbox" checked>物体（房屋 / 围墙 / 沉船）</label>
     <label class="chk"><input id="lyGrid" type="checkbox" checked>网格 / 边界</label>

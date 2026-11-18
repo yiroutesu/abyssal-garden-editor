@@ -60,7 +60,7 @@ const JELLY_SWARM = [[-4, -25, -2, 6, 13], [54, -24, 8, 5, 11], [-1, -24, -98, 6
 
 // ---------------------------------------------------------------- editor overrides
 // build.mjs inlines editor/world.json here as WORLD_EDIT; the editor page itself has no WORLD_EDIT.
-const CFG = { kelp: 1, ground: 1, props: 1, reefCover: 0.5, reefHeight: 1, reefRing: 60 };
+const CFG = { kelp: 1, kelpSize: 1, ground: 1, props: 1, reefCover: 0.5, reefHeight: 1, reefRing: 60 };
 if (typeof WORLD_EDIT !== 'undefined') {
   const E = WORLD_EDIT;
   const fill = (a, b) => { if (!b) return; a.length = 0; a.push(...b); };
@@ -165,24 +165,28 @@ function makeWorld(D, T, flyPts, POSES) {
   const tangent = (n) => { let t = abs(n[1]) < 0.9 ? [n[2], 0, -n[0]] : [1, 0, 0]; const l = hypot(...t); t = t.map((v) => v / l); return [t, [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]]; };
   const nearFly = (x, y, z, r) => { for (const p of flyPts) if (hypot(x - p[0], z - p[2]) < r && y < p[1] + 3 && y > p[1] - 13) return true; return false; };
   const nearPose = (x, z, r = 3) => { for (const p of POSES) if (hypot(x - p[0], z - p[2]) < r) return true; return false; };
-  // --- kelp columns
-  const column = (x, y, z, H, kind, dens = 1) => {
-    const strands = 2 + (rnd() < 0.6) + (rnd() < 0.3), ph = rnd() * TAU, tw = rr(0.1, 0.28), sr = rr(0.2, 0.55), sc = rr(0.75, 1.25);
-    const la = rnd() * TAU, lm = rr(0, 0.11), full = rr(0.55, 1.3) * dens;
-    const stem = (s, h) => { const a = ph + s * TAU / strands + h * tw, r = sr * (1 - 0.6 * h / H), ln = lm * h * h / H; return [x + cos(a) * r + cos(la) * ln, z + sin(a) * r + sin(la) * ln, a]; };
-    for (let s = 0; s < strands; s++) for (let h = 0; h < H - 1; h += 1.7) { const p = stem(s, h); leaf(big, p[0], y + h, p[1], 2.1, p[2] + PI / 2, 0.1, 0.17, h, 1, rnd(), rnd(), 0.3); }
-    const n = floor(H * 30 * full);
+  // --- charophyte clumps: a few roots with fronds radiating out low over the seabed, crossing each other
+  const column = (x, y, z, kind, dens = 1) => {
+    const sc = CFG.kelpSize, root = 2 + (rnd() < 0.55) + (rnd() < 0.3); // 2-4 源头
+    const base = [];
+    for (let s = 0; s < root; s++) { const a = rnd() * TAU, r = rr(0.04, 0.5) * sc; base.push([x + cos(a) * r, y + rr(-0.05, 0.05), z + sin(a) * r]); }
+    const n = floor((14 + rnd() * 12) * dens);
     for (let i = 0; i < n; i++) {
-      const t = pow(rnd(), 0.9), h = t * H, p = stem((rnd() * strands) | 0, h);
-      const L = ((0.55 + 0.75 * rnd() * rnd()) * (1 - 0.5 * t * t) * sc + 0.25) * (kind === 1 ? 1.25 : 1.15);
-      const tilt = mix(rr(0.4, 1.0), rr(0.15, 0.45), t);
-      const type = kind === 1 ? (rnd() < 0.8 ? 3 : 4) : kind === 2 ? (rnd() < 0.5 ? 4 : 0) : 0;
-      leaf(big, p[0], y + h, p[1], L, rnd() * TAU, tilt, L * (kind === 1 ? rr(0.09, 0.13) : rr(0.15, 0.21)) + 0.03, h, type, rnd(), rnd(), rr(0.38, 0.95));
+      const p = base[(rnd() * root) | 0], a = rnd() * TAU;
+      const L = rr(0.3, 0.95) * sc * (kind === 1 ? 1.15 : 1), w = L * rr(0.05, 0.09) + 0.012, t = kind === 1 && rnd() < 0.25 ? 2 : 0;
+      leaf(big, p[0], p[1], p[2], L, a, rr(1.02, 1.5), w, 0, t, rnd(), rnd(), rr(0.35, 0.9));
+      // a short side twig: makes the radiating fronds cross and interleave
+      if (rnd() < 0.4) leaf(big, p[0] + cos(a) * L * 0.45, p[1] + 0.06 * sc, p[2] + sin(a) * L * 0.45, L * rr(0.25, 0.45), a + rr(1.2, 2.2), rr(0.9, 1.4), w * 0.8, 0, t, rnd(), rnd(), rr(0.3, 0.8));
     }
-    for (let i = floor(H * (kind === 1 ? 16 : 13)); i > 0; i--) { const h = rnd() * H, a = rnd() * TAU, r = rr(0.15, 0.8) * (1 - 0.5 * h / H), ln = lm * h * h / H; glint(x + cos(a) * r + cos(la) * ln, y + h, z + sin(a) * r + sin(la) * ln, h, rnd(), kind === 1 ? rnd() : rnd() * 0.6, rr(0.018, 0.05), 0); }
+    for (let i = 0, m = 3 + (rnd() * 4 | 0); i < m; i++) {
+      const p = base[(rnd() * root) | 0], L = rr(0.22, 0.65) * sc;
+      leaf(big, p[0], p[1], p[2], L, rnd() * TAU, rr(0.2, 0.85), L * rr(0.05, 0.085) + 0.01, 0.3, 0, rnd(), rnd(), rr(0.4, 0.85));
+    }
+    const hh = 1.6 * sc;
+    for (let i = 2 + (rnd() * 4 | 0); i > 0; i--) glint(x + rr(-0.5, 0.5) * sc, y + rr(0.1, hh), z + rr(-0.5, 0.5) * sc, rnd() * hh, rnd(), kind === 1 ? rnd() : rnd() * 0.6, rr(0.012, 0.03), 0);
     // light absorption footprint for the skylight bake
     const hx = round((x - OX) / VS / 2), hz = round((z - OZ) / VS / 2);
-    for (let hy = floor((y - OY) / VS / 2); hy <= floor((y + H - OY) / VS / 2); hy++) {
+    for (let hy = floor((y - OY) / VS / 2); hy <= floor((y + hh - OY) / VS / 2); hy++) {
       if (hy >= 0 && hy < NY / 2 && hx > 0 && hx < NX / 2 - 1 && hz > 0 && hz < NZ / 2 - 1) kelpAbs[hx + NX / 2 * (hy + NY / 2 * hz)] += 0.17;
     }
   };
@@ -199,15 +203,15 @@ function makeWorld(D, T, flyPts, POSES) {
     const key = floor(x / 2.3) * 4096 + floor(z / 2.3);
     if (occ.has(key)) return;
     const f = floorsAt(x, z); const c = [];
-    for (let i = 0; i < f.length; i += 2) if (f[i + 1] > 9) c.push(i);
+    for (let i = 0; i < f.length; i += 2) if (f[i + 1] > 1.6) c.push(i);
     if (!c.length) return;
     const i = c[(rnd() * c.length) | 0], y = f[i];
     if (grad(x, y, z)[1] < 0.55) return;
     if (!force && flyPts.some((p) => hypot(x - p[0], z - p[2]) < 5)) return;
     occ.add(key);
-    column(x, y - 0.3, z, min(f[i + 1] - rr(0.8, 5), force ? rr(30, 42) : rr(15, 40)), kind, dens);
+    column(x, y - 0.05, z, kind, dens);
   };
-  // hand-placed columns framing the viewpoints: x, z, kind, density
+  // hand-placed charophyte patches framing the viewpoints: x, z, kind, density
   if (CFG.columns) for (const p of [[...rel(0, 11, -8.5), 0], [...rel(0, 16, -10.5), 0], [...rel(0, 21, -9), 0], [...rel(0, 9, 7), 0], [...rel(0, 14, 9.5), 0], [...rel(0, 19, 8), 0], [...rel(0, 26, 6), 0],
     [...rel(5, 6.5, 5.2), 1], [...rel(5, 12, 7), 1], [...rel(5, 15, -8), 0], [...rel(5, 22, -5), 1], [...rel(3, 12, -5.5), 0], [...rel(3, 16, 5.5), 0], [...rel(3, 20, -4.5), 0], [...rel(3, 25, 6), 0], [...rel(3, 13, 8), 0], [...rel(3, 30, -7), 0], [24, 62, 1], [-6, 96, 1], [20, 96, 2], [-10, 70, 0], [16, 52, 1],
     [...rel(4, 15, -9), 0, 1.2], [...rel(4, 19, -13), 0, 1.2], [...rel(4, 23, -8.5), 0, 1.2], [...rel(4, 25, -15), 0, 1.2],
@@ -433,7 +437,7 @@ function makeWorld(D, T, flyPts, POSES) {
   for (let i = 0; i < snow.length; i++) snow[i] = rnd();
 
   const sol = { data: [], ranges: [] }; let si = 0;
-  for (let m = 0; m < 29; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
+  for (let m = 0; m < solids.length; m++) { const a = solids[m] || []; sol.ranges.push([si, a.length / 12]); si += a.length / 12; for (let i = 0; i < a.length; i++) sol.data.push(a[i]); }
   const packC = (L) => {
     let n = 0; const start = new Uint32Array(nCells + 1);
     for (let c = 0; c < nCells; c++) { start[c] = n; n += L[c].length / 12; }
@@ -659,6 +663,96 @@ function meshWall() {
     const x = rr(-1.9, 1.9);
     m.sweep([[x, .1, rr(.6, 1.2)], [x + rr(.25, .45), rr(.12, .22), rr(.7, 1.4)]], .30, .20, up);
   }
+  return m;
+}
+// shared stone-course kit for the ruined houses: courses, timber and rubble all follow the first hut
+function houseKit(m) {
+  const up = () => [0, 1, 0];
+  const block = (x, y, z, L, along) => {
+    const dx = along ? 0 : L / 2, dz = along ? L / 2 : 0;
+    m.sweep([[x - dx, y, z - dz], [x + dx, y, z + dz]], .40, .30, up);
+  };
+  const wall = (x0, z0, x1, z1, hMax, keep = 1, gap = null) => {
+    const along = abs(x1 - x0) < abs(z1 - z0) ? 1 : 0;
+    const n = max(1, round(hypot(x1 - x0, z1 - z0) / .66));
+    for (let i = 0; i < n; i++) {
+      const f = n > 1 ? i / (n - 1) : 0;
+      if (f > keep) break;
+      if (gap && f > gap[0] && f < gap[1]) continue;
+      const hh = hMax * (.62 + .5 * fbm(i * .9 + x0 * .5, 3, z0 * .7, 2));
+      for (let y = .15; y < hh; y += .31) {
+        if (y > .45 && rnd() < .13) continue;
+        block(mix(x0, x1, f) + (along ? rr(-.05, .05) : 0), y, mix(z0, z1, f) + (along ? 0 : rr(-.05, .05)), .62, along);
+      }
+    }
+  };
+  const beam = (a, b, w = .16) => m.sweep([a, b], w, w, up);
+  const rubble = (n, rx, rz) => {
+    for (let i = 0; i < n; i++) {
+      const an = rnd() * TAU, r = rr(.6, 1.35);
+      block(cos(an) * rx * r, rr(.05, .16), sin(an) * rz * r, rr(.32, .7), rnd() < .5 ? 0 : 1);
+    }
+  };
+  return { up, block, wall, beam, rubble };
+}
+// ruined hut B: an L of standing walls, a low sill where the rest has collapsed, all rafters down
+function meshHouseB() {
+  rseed(421);
+  const m = new Mesh(), K = houseKit(m);
+  K.wall(-3.2, -2.3, 3.2, -2.3, 2.5, 1, [.28, .4]);
+  K.wall(-3.2, -2.3, -3.2, 2.3, 2.1, .92);
+  K.wall(3.2, -2.3, 3.2, 2.3, .65, 1);
+  K.wall(-3.2, 2.3, 2.9, 2.3, .5, 1);
+  for (const [x, z, h] of [[-3.2, -2.3, 2.9], [3.2, -2.3, 2.4], [-3.2, 2.3, 1.6]]) K.beam([x, 0, z], [x, h, z], .24);
+  K.beam([-3.4, 2.6, -2.3], [3.4, 2.15, -2.3], .2);
+  for (let i = 0; i < 10; i++) {          // rafters lying across the floor, criss-crossing
+    const x = rr(-2.9, 2.9), z = rr(-1.9, 1.9);
+    K.beam([x, rr(.18, .5), z], [x + rr(-1.2, 1.2), rr(.07, .3), z + rr(-1.8, 1.8)], .12);
+  }
+  for (let i = 0; i < 12; i++) {          // tiles shed around the plot
+    const an = rnd() * TAU, r = rr(3.5, 5.4), x = cos(an) * r, z = sin(an) * r * .85;
+    m.sweep([[x, .12, z], [x + rr(.3, .45), .14, z + rr(-.1, .1)]], .3, .06, K.up);
+  }
+  K.rubble(22, 5.4, 4.3);
+  return m;
+}
+// ruined hut C: three walls with a deep break, a chimney stub and one corner of the tiled roof left
+function meshHouseC() {
+  rseed(517);
+  const m = new Mesh(), K = houseKit(m);
+  K.wall(-2.7, -2.1, 2.7, -2.1, 2.9, 1, [.42, .56]);
+  K.wall(2.7, -2.1, 2.7, 2.1, 2.6, 1);
+  K.wall(-2.7, -2.1, -2.7, 2.1, 2.4, .38);
+  K.wall(-2.7, 2.1, 1.1, 2.1, 1.35, 1);
+  for (let y = .2; y < 3.5; y += .34) K.block(2.05, y, -2.1, .8, 0);   // chimney stack
+  K.block(2.05, 3.5, -2.1, .5, 1);
+  K.beam([-2.7, 2.75, -2.1], [2.7, 3.15, -2.1], .22);
+  K.beam([2.7, 2.95, -2.1], [2.7, 2.65, 2.1], .22);
+  for (let z = -2.0, row = 0; z > -1.05; z -= .28, row++)   // surviving corner of the tile roof
+    for (let x = 1.2; x < 2.9; x += .4) m.sweep([[x, 2.9 - row * .05, z], [x + .4, 2.86 - row * .05, z - .02]], .31, .06, K.up);
+  for (let i = 0; i < 5; i++) K.beam([rr(-2.4, 2.4), rr(1.4, 2.5), rr(-1.8, 1.8)], [rr(-2.6, 2.6), rr(.15, .5), rr(-1.9, 1.9)], .13);
+  for (let i = 0; i < 7; i++) {           // roof tiles dropped into the room
+    const x = rr(-2.2, 2.2), z = rr(-1.6, 1.8);
+    m.sweep([[x, rr(.1, .4), z], [x + .4, rr(.1, .35), z - .02]], .31, .06, K.up);
+  }
+  K.rubble(20, 4.4, 3.6);
+  return m;
+}
+// ruined shed D: low walls, a wide door gap, a flat stone roof with only its back slabs left
+function meshHouseD() {
+  rseed(613);
+  const m = new Mesh(), K = houseKit(m);
+  K.wall(-2.1, -1.7, 2.1, -1.7, 1.95, 1);
+  K.wall(-2.1, -1.7, -2.1, 1.7, 1.75, 1, [.34, .5]);
+  K.wall(2.1, -1.7, 2.1, 1.7, 1.55, .82);
+  K.wall(-2.1, 1.7, 1.5, 1.7, 1.15, 1);
+  for (let i = 0; i < 3; i++) m.sweep([[-1.85, 2.02 - i * .03, -1.5 + i * .58], [.3, 1.98 - i * .03, -1.5 + i * .58]], .55, .16, K.up);
+  for (let i = 0; i < 4; i++) K.beam([-1.8 + i * 1.05, 1.9, -1.55], [-1.5 + i * 1.05, .45, .9], .12);
+  for (let i = 0; i < 3; i++) {           // slabs that slid off and lean on the front wall
+    const x = rr(-1.4, 1.4);
+    m.sweep([[x, .25, 2.2], [x + rr(-.4, .4), 1.15, 2.0]], .5, .14, K.up);
+  }
+  K.rubble(16, 3.4, 3.0);
   return m;
 }
 // manta ray: span along x (half span = 1), nose +z; aux = span coordinate for the flap animation

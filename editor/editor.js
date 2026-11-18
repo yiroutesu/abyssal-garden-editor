@@ -12,16 +12,22 @@
   const MESH_NAMES = ['巨石 A', '巨石 B', '巨石 C', '巨石 D', '海绵 A', '海绵 B', '海绵 C', '珊瑚 A', '珊瑚 B', '管状海绵', '鲸尾石雕', '沉船'];
   const MESH_MAT = [1, 1, 1, 1, 4, 4, 4, 5, 5, 4, 2, 3];
   // the hut lives at mesh id 27 (ids 12-26 are animated meshes and LOD copies, not placeable)
-  MESH_NAMES[27] = '废弃房屋';
+  MESH_NAMES[27] = '废弃房屋 A';
   MESH_MAT[27] = 3;
   MESH_NAMES[28] = '围墙段';
   MESH_MAT[28] = 2;
+  MESH_NAMES[29] = '废弃房屋 B';
+  MESH_MAT[29] = 3;
+  MESH_NAMES[30] = '废弃房屋 C';
+  MESH_MAT[30] = 3;
+  MESH_NAMES[31] = '废弃房屋 D';
+  MESH_MAT[31] = 3;
   const PLACEABLE = MESH_NAMES.reduce((a, n, i) => (n ? a.concat(i) : a), []);
   const ZONE_DEFS = {
     hot: { label: '珊瑚热区', color: '#ff8c3c', fields: [['半径', 2, 1, 6, 90]], make: (x, z) => [x, z, 30] },
     zs: { label: '海绵/珊瑚区', color: '#78c8ff', fields: [['半径', 2, 1, 6, 90], ['权重', 3, 0.05, 0, 1]], make: (x, z) => [x, z, 24, 0.7] },
     magenta: { label: '品红地被', color: '#ff3cb4', fields: [['半径', 2, 1, 4, 40]], make: (x, z) => [x, z, 9] },
-    kelp: { label: '海带区', color: '#50dc78', fields: [['半径', 2, 1, 5, 60], ['密度', 3, 0.05, 0, 1]], make: (x, z) => [x, z, 14, 0.85] },
+    kelp: { label: '轮藻区', color: '#50dc78', fields: [['半径', 2, 1, 5, 60], ['密度', 3, 0.05, 0, 1]], make: (x, z) => [x, z, 14, 0.85] },
     gardens: { label: '海绵园圃', color: '#ffdc78', fields: [['半径', 2, 1, 3, 30], ['数量', 3, 10, 10, 600]], make: (x, z) => [x, z, 8, 140] },
   };
   // creature spawn groups: the circle is the orbit radius, the numbers are the generator
@@ -50,7 +56,7 @@
     ],
     zones: { hot: clone(HOT), zs: clone(ZS), magenta: clone(MAGENTA), kelp: clone(KELPZ), gardens: clone(GARDENS) },
     spawns: { fish: clone(FISH_SCHOOLS), mantas: clone(MANTA_PATHS), jellies: clone(JELLY_SWARM) },
-    cfg: { kelp: 1, ground: 1, props: 1, noise: 1, columns: 1, boulders: 1, debris: 1, reefCover: 0.5, reefHeight: 1, reefRing: 60 },
+    cfg: { kelp: 1, kelpSize: 1, ground: 1, props: 1, noise: 1, columns: 1, boulders: 1, debris: 1, reefCover: 0.5, reefHeight: 1, reefRing: 60 },
   });
 
   const normalize = (d) => {
@@ -66,7 +72,7 @@
     for (const k of Object.keys(SPAWN_DEFS)) if (!Array.isArray(d.spawns[k])) d.spawns[k] = base.spawns[k];
     // hard-coded decor follows the authored content: an emptied map stays empty
     const decorated = d.terrain.mesas.length + d.terrain.arches.length + d.terrain.holes.length || d.objects.length ? 1 : 0;
-    d.cfg = Object.assign({ kelp: 1, ground: 1, props: 1, noise: decorated, columns: decorated, boulders: decorated, debris: decorated, reefCover: 0.5, reefHeight: 1, reefRing: 60 }, d.cfg || {});
+    d.cfg = Object.assign({ kelp: 1, kelpSize: 1, ground: 1, props: 1, noise: decorated, columns: decorated, boulders: decorated, debris: decorated, reefCover: 0.5, reefHeight: 1, reefRing: 60 }, d.cfg || {});
     return d;
   };
 
@@ -967,10 +973,10 @@
   }
 
   function syncCfg() {
-    for (const [id, key] of [['#cfgKelp', 'kelp'], ['#cfgGround', 'ground'], ['#cfgProps', 'props'], ['#cfgReefCover', 'reefCover'], ['#cfgReefHeight', 'reefHeight'], ['#cfgReefRing', 'reefRing']]) $(id).value = data.cfg[key];
+    for (const [id, key] of [['#cfgKelp', 'kelp'], ['#cfgKelpSize', 'kelpSize'], ['#cfgGround', 'ground'], ['#cfgProps', 'props'], ['#cfgReefCover', 'reefCover'], ['#cfgReefHeight', 'reefHeight'], ['#cfgReefRing', 'reefRing']]) $(id).value = data.cfg[key];
     for (const [id, key] of [['#cfgNoise', 'noise'], ['#cfgColumns', 'columns'], ['#cfgBoulders', 'boulders'], ['#cfgDebris', 'debris']]) $(id).checked = !!data.cfg[key];
   }
-  for (const [id, key] of [['#cfgKelp', 'kelp'], ['#cfgGround', 'ground'], ['#cfgProps', 'props']]) {
+  for (const [id, key] of [['#cfgKelp', 'kelp'], ['#cfgKelpSize', 'kelpSize'], ['#cfgGround', 'ground'], ['#cfgProps', 'props']]) {
     $(id).addEventListener('input', (e) => { data.cfg[key] = +e.target.value; autosave(); });
   }
   for (const [id, key] of [['#cfgReefCover', 'reefCover'], ['#cfgReefHeight', 'reefHeight'], ['#cfgReefRing', 'reefRing']]) {

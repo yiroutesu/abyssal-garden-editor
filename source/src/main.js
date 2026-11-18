@@ -276,7 +276,7 @@ D = Wd.gy = T.smp = null; // with gy goes the generator's working memory (about 
 await say('Building set pieces…', 0.94, 1200);
 // mesh ids: 0-3 boulders, 4-6 sponges, 7-8 coral, 9 tube sponge, 10 whale fluke, 11 ship, 12 manta, 13 fish,
 // 14-20 rock chunks + pebbles, 21-22 coral LOD, 23-25 far LOD of the large rock chunks, 26 jellyfish,
-// 27 ruined hut, 28 ruined wall section
+// 27 ruined hut A, 28 ruined wall section, 29-31 ruined huts B/C/D
 const meshes = [meshChunk(1, 3), meshChunk(7, 3), meshChunk(13, 3), meshChunk(22, 3),
   meshLathe([[0, 0, 0.5], [0.34, 0, 0.6], [0.5, 0.2, 0.85], [0.6, 0.6, 1], [0.55, 0.95, 1], [0.47, 1.08, 1], [0.38, 1.1, 0.9], [0.3, 1.0, 0.45], [0.26, 0.6, 0.15], [0, 0.35, 0.05]], 18, 0.3, 9),
   meshLathe([[0, 0, 0.5], [0.2, 0, 0.6], [0.26, 0.5, 0.85], [0.4, 1.25, 1], [0.4, 1.42, 1], [0.33, 1.48, 0.9], [0.26, 1.38, 0.4], [0.18, 0.8, 0.12], [0, 0.5, 0.05]], 16, 0.35, 8),
@@ -287,6 +287,9 @@ meshes.push(meshFluke(), meshShip().build(), meshManta().build(), meshFish().bui
 meshes.push(meshJelly().build());
 meshes.push(meshHouse().build());
 meshes.push(meshWall().build());
+meshes.push(meshHouseB().build());
+meshes.push(meshHouseC().build());
+meshes.push(meshHouseD().build());
 let nV = 0, nI = 0;
 for (const m of meshes) { m.v0 = nV; m.i0 = nI; nV += m.nv; nI += m.ib.length; }
 const allV = new Uint8Array(nV * 16), allI = new Uint32Array(nI);
